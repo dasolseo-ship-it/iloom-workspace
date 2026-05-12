@@ -1,0 +1,5 @@
+.env
+*.env
+00-system/credentials.json
+00-system/token.json
+.claude/settings.local.json
