@@ -1,6 +1,14 @@
 {
   "model": "claude-sonnet-4-6",
+  "skipDangerousModePermissionPrompt": true,
   "permissions": {
-    "defaultMode": "default"
+    "defaultMode": "bypassPermissions",
+    "ask": [
+      "Bash(rm *)",
+      "Bash(rm -rf *)",
+      "Bash(Remove-Item *)",
+      "Bash(del *)",
+      "Bash(rmdir *)"
+    ]
   }
 }
