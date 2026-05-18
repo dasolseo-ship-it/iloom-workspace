@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iloom 담당 매장 실적 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --sidebar-bg: #0B2218;
+  --sidebar-hover: rgba(255,255,255,0.06);
+  --sidebar-active: rgba(74,222,128,0.12);
+  --accent: #4ade80;
+  --accent-dark: #22c55e;
+  --red: #c80a1e;
+  --bg: #EFF2EF;
+  --white: #FFFFFF;
+  --text: #111827;
+  --sub: #6B7280;
+  --border: #E5E7EB;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.sidebar-logo .brand {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+}
+.sidebar-logo .tagline {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 2px;
+  letter-spacing: 0.3px;
+}
+.sidebar-section {
+  padding: 20px 12px 8px;
+}
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  padding: 0 8px;
+  margin-bottom: 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  margin-bottom: 2px;
+  border-left: 2px solid transparent;
+}
+.nav-item:hover { background: var(--sidebar-hover); color: rgba(255,255,255,0.85); }
+.nav-item.active {
+  background: var(--sidebar-active);
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+.nav-item .icon { font-size: 15px; width: 18px; text-align: center; }
+.sidebar-bottom {
+  margin-top: auto;
+  padding: 16px 12px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+.user-avatar {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--sidebar-bg);
+  flex-shrink: 0;
+}
+.user-name { font-size: 12px; color: rgba(255,255,255,0.8); font-weight: 500; }
+.user-role { font-size: 10px; color: rgba(255,255,255,0.35); }
+
+/* ── Main ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Top bar */
+.topbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.topbar-left h1 { font-size: 16px; font-weight: 700; }
+.topbar-left p { font-size: 11px; color: var(--sub); margin-top: 1px; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.badge-date {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--sub);
+  font-weight: 500;
+}
+.badge-live {
+  background: rgba(74,222,128,0.12);
+  color: var(--accent-dark);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.badge-live::before {
+  content: '';
+  width: 6px; height: 6px;
+  background: var(--accent-dark);
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Content */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+/* KPI Row */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card.highlight {
+  background: var(--sidebar-bg);
+}
+.kpi-card .kpi-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+.kpi-icon.green { background: rgba(74,222,128,0.12); }
+.kpi-icon.red-bg { background: rgba(200,10,30,0.1); }
+.kpi-icon.gray { background: var(--bg); }
+.kpi-label {
+  font-size: 11px;
+  color: var(--sub);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.kpi-card.highlight .kpi-label { color: rgba(255,255,255,0.5); }
+.kpi-value {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+.kpi-card.highlight .kpi-value { color: var(--accent); }
+.kpi-unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sub);
+  margin-left: 2px;
+}
+.kpi-card.highlight .kpi-unit { color: rgba(255,255,255,0.4); }
+.kpi-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.kpi-tag.up { background: rgba(74,222,128,0.12); color: var(--accent-dark); }
+.kpi-tag.down { background: rgba(200,10,30,0.1); color: var(--red); }
+.kpi-tag.neutral { background: var(--bg); color: var(--sub); }
+
+/* Charts row */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.chart-card {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+}
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.chart-title { font-size: 13px; font-weight: 700; }
+.chart-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+.chart-legend {
+  display: flex;
+  gap: 12px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--sub);
+}
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+}
+.chart-wrap { position: relative; height: 220px; }
+.chart-wrap.tall { height: 260px; }
+
+/* Table */
+.table-card {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.table-card-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.table-card-header .chart-title { font-size: 13px; }
+.table-note {
+  font-size: 11px;
+  color: var(--sub);
+  background: var(--bg);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+thead th {
+  padding: 10px 16px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sub);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+thead th:first-child { text-align: left; }
+tbody td {
+  padding: 11px 16px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+}
+tbody td:first-child {
+  text-align: left;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #F9FAFB; }
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  margin-right: 8px;
+  font-family: 'Montserrat', sans-serif;
+}
+.rank-1 .rank-badge { background: var(--accent); color: var(--sidebar-bg); }
+.rank-2 .rank-badge { background: #d1fae5; color: #065f46; }
+.rank-danger td:first-child .store-name { color: var(--red); }
+.store-type {
+  font-size: 10px;
+  color: var(--sub);
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+.week-ongoing {
+  color: var(--sub);
+}
+.week-ongoing::after {
+  content: '~';
+  font-size: 9px;
+  color: var(--accent-dark);
+  margin-left: 2px;
+}
+.total-row td {
+  background: var(--bg) !important;
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+}
+.bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.mini-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+.mini-bar.low { background: var(--red); }
+
+/* Insight */
+.insight-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.insight-card {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: var(--card-shadow);
+  border-left: 3px solid var(--accent);
+}
+.insight-card.warn { border-left-color: var(--red); }
+.insight-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent-dark);
+  margin-bottom: 10px;
+}
+.insight-card.warn .insight-head { color: var(--red); }
+.insight-item {
+  font-size: 12px;
+  color: #374151;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+.insight-item:last-child { border-bottom: none; padding-bottom: 0; }
+.insight-item strong { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="brand">iloom</div>
+    <div class="tagline">Sales Admin</div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Menu</div>
+    <div class="nav-item active">
+      <span class="icon">▦</span> 대시보드
+    </div>
+    <div class="nav-item">
+      <span class="icon">◎</span> 매장 현황
+    </div>
+    <div class="nav-item">
+      <span class="icon">↗</span> 수주 분석
+    </div>
+    <div class="nav-item">
+      <span class="icon">☰</span> 상품별 실적
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">General</div>
+    <div class="nav-item">
+      <span class="icon">⚙</span> 설정
+    </div>
+    <div class="nav-item">
+      <span class="icon">?</span> 도움말
+    </div>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="user-card">
+      <div class="user-avatar">서</div>
+      <div>
+        <div class="user-name">서다솔</div>
+        <div class="user-role">영업관리</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Sales Dashboard</h1>
+      <p>담당 매장 실적 모니터링</p>
+    </div>
+    <div class="topbar-right">
+      <div class="badge-date">📅 2026년 5월 · 3주차 진행 중</div>
+      <div class="badge-live">실시간</div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- KPI Cards -->
+    <div class="kpi-row">
+      <div class="kpi-card highlight">
+        <div class="kpi-icon green">💰</div>
+        <div class="kpi-label">5월 누적 수주액</div>
+        <div>
+          <span class="kpi-value">781</span>
+          <span class="kpi-unit">백만원</span>
+        </div>
+        <div class="kpi-tag up">▲ 3주차까지</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon gray">📋</div>
+        <div class="kpi-label">총 수주 건수</div>
+        <div>
+          <span class="kpi-value">894</span>
+          <span class="kpi-unit">건</span>
+        </div>
+        <div class="kpi-tag neutral">9개 매장</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon green">🏆</div>
+        <div class="kpi-label">이달 1위 매장</div>
+        <div>
+          <span class="kpi-value" style="font-size:18px">현대목동</span>
+        </div>
+        <div class="kpi-tag up">139백만원</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon red-bg">⚠</div>
+        <div class="kpi-label">주의 매장</div>
+        <div>
+          <span class="kpi-value" style="font-size:18px">롯데인천2</span>
+        </div>
+        <div class="kpi-tag down">41백만원 · 최하위</div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">매장별 누적 수주액</div>
+            <div class="chart-sub">백만원 단위 · 5월 기준</div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartRanking"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">주차별 수주액 추이</div>
+            <div class="chart-sub">전체 합산 · 백만원</div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <div class="legend-dot" style="background:#4ade80"></div> 수주액
+            </div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartWeekly"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grouped Bar -->
+    <div class="charts-row" style="grid-template-columns:1fr">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">매장 × 주차 비교</div>
+            <div class="chart-sub">백만원 단위</div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#0B2218"></div> 1주차</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> 2주차</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#86efac"></div> 3주차*</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall">
+          <canvas id="chartGrouped"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Insight Row -->
+    <div class="insight-row">
+      <div class="insight-card">
+        <div class="insight-head">✦ 주목 포인트</div>
+        <div class="insight-item"><strong>현대목동</strong> 신설점 — 2주차에 107백만 집중, 현대중동 이전 수요 흡수 효과</div>
+        <div class="insight-item"><strong>신세계시흥2</strong> — 주차별 균등 분포(32→30→28백만), 안정적 운영 우수 사례</div>
+        <div class="insight-item"><strong>3주차</strong>는 5/18 기준 진행 중 — 주 종료(5/21) 후 수치 확정</div>
+      </div>
+      <div class="insight-card warn">
+        <div class="insight-head">⚠ 주의 필요</div>
+        <div class="insight-item"><strong>롯데인천2</strong> 최하위 41백만 · 47건 — 건수도 최저, 원인 파악 및 지원 검토 필요</div>
+        <div class="insight-item"><strong>송도5</strong> 3주차 급감 — 25→19→6백만 (진행 중), 추세 모니터링 필요</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="chart-title">주차별 수주금액 상세</div>
+        <div class="table-note">단위: 백만원 &nbsp;|&nbsp; * 3주차 진행 중 (5/18 기준)</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>매장</th>
+            <th>1주차<br><span style="font-weight:400;font-size:10px">05/01–07</span></th>
+            <th>2주차<br><span style="font-weight:400;font-size:10px">05/08–14</span></th>
+            <th>3주차*<br><span style="font-weight:400;font-size:10px">05/15–18</span></th>
+            <th>합계</th>
+            <th>건수</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="rank-1">
+            <td><span class="rank-badge">1</span><span class="store-name">현대목동</span><span class="store-type">입점BS</span></td>
+            <td>13</td><td>107</td><td class="week-ongoing">20</td><td><strong>139</strong></td><td>112건</td>
+          </tr>
+          <tr class="rank-2">
+            <td><span class="rank-badge">2</span>부천3<span class="store-type">B</span></td>
+            <td>62</td><td>33</td><td class="week-ongoing">17</td><td><strong>112</strong></td><td>142건</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge" style="background:var(--bg);color:var(--sub)">3</span>롯데영등포<span class="store-type">입점BS</span></td>
+            <td>46</td><td>32</td><td class="week-ongoing">23</td><td><strong>101</strong></td><td>127건</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge" style="background:var(--bg);color:var(--sub)">4</span>김포5<span class="store-type">B</span></td>
+            <td>48</td><td>35</td><td class="week-ongoing">17</td><td><strong>100</strong></td><td>128건</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge" style="background:var(--bg);color:var(--sub)">5</span>신세계시흥2<span class="store-type">투자형B</span></td>
+            <td>32</td><td>30</td><td class="week-ongoing">28</td><td><strong>90</strong></td><td>102건</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge" style="background:var(--bg);color:var(--sub)">6</span>인천중앙2<span class="store-type">B</span></td>
+            <td>32</td><td>34</td><td class="week-ongoing">23</td><td><strong>89</strong></td><td>97건</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge" style="background:var(--bg);color:var(--sub)">7</span>롯데구리<span class="store-type">입점BS</span></td>
+            <td>25</td><td>14</td><td class="week-ongoing">21</td><td><strong>60</strong></td><td>80건</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge" style="background:var(--bg);color:var(--sub)">8</span>송도5<span class="store-type">투자형B</span></td>
+            <td>25</td><td>19</td><td class="week-ongoing">6</td><td><strong>50</strong></td><td>59건</td>
+          </tr>
+          <tr class="rank-danger">
+            <td><span class="rank-badge" style="background:#fee2e2;color:var(--red)">9</span><span class="store-name">롯데인천2</span><span class="store-type">입점BS</span></td>
+            <td>20</td><td>11</td><td class="week-ongoing">11</td><td><strong style="color:var(--red)">41</strong></td><td>47건</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td>합계</td>
+            <td>302</td><td>314</td><td>165</td><td><strong>781</strong></td><td>894건</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+const STORES = ["현대목동","부천3","롯데영등포","김포5","신세계시흥2","인천중앙2","롯데구리","송도5","롯데인천2"];
+const TOTALS = [139,112,101,100,90,89,60,50,41];
+const WEEKLY = {
+  "1주차": [13,62,46,48,32,32,25,25,20],
+  "2주차": [107,33,32,35,30,34,14,19,11],
+  "3주차*": [20,17,23,17,28,23,21,6,11],
+};
+const WEEKS = ["1주차","2주차","3주차*"];
+
+const fmtM = v => v + '백만';
+
+const chartDefaults = {
+  font: { family: "'Noto Sans KR', sans-serif" },
+  color: '#6B7280',
+};
+Chart.defaults.font.family = "'Noto Sans KR', sans-serif";
+Chart.defaults.color = '#6B7280';
+
+// Chart 1: 매장별 순위 가로 막대
+new Chart(document.getElementById('chartRanking'), {
+  type: 'bar',
+  data: {
+    labels: [...STORES].reverse(),
+    datasets: [{
+      data: [...TOTALS].reverse(),
+      backgroundColor: TOTALS.slice().reverse().map((v, i) =>
+        i === TOTALS.length - 1 ? '#4ade80' :
+        i === 0 ? '#fee2e2' :
+        i <= 1 ? '#86efac' : '#D1FAE5'
+      ),
+      borderRadius: 4,
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ' ' + fmtM(ctx.raw) } }
+    },
+    scales: {
+      x: {
+        grid: { color: '#F3F4F6' },
+        ticks: { font: { family: 'Montserrat', size: 11 }, callback: v => v + 'M' }
+      },
+      y: { grid: { display: false }, ticks: { font: { size: 12 } } }
+    }
+  }
+});
+
+// Chart 2: 주차별 추이
+const weekTotals = WEEKS.map(w => WEEKLY[w].reduce((a, b) => a + b, 0));
+new Chart(document.getElementById('chartWeekly'), {
+  type: 'line',
+  data: {
+    labels: WEEKS,
+    datasets: [{
+      data: weekTotals,
+      borderColor: '#4ade80',
+      backgroundColor: 'rgba(74,222,128,0.08)',
+      borderWidth: 2.5,
+      pointBackgroundColor: '#4ade80',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 6,
+      fill: true,
+      tension: 0.35,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ' ' + fmtM(ctx.raw) } }
+    },
+    scales: {
+      y: {
+        grid: { color: '#F3F4F6' },
+        ticks: { font: { family: 'Montserrat', size: 11 }, callback: v => v + 'M' }
+      },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Chart 3: 매장×주차 그룹 막대
+new Chart(document.getElementById('chartGrouped'), {
+  type: 'bar',
+  data: {
+    labels: STORES,
+    datasets: [
+      { label: '1주차', data: WEEKLY["1주차"], backgroundColor: '#0B2218', borderRadius: 3, borderWidth: 0 },
+      { label: '2주차', data: WEEKLY["2주차"], backgroundColor: '#4ade80', borderRadius: 3, borderWidth: 0 },
+      { label: '3주차*', data: WEEKLY["3주차*"], backgroundColor: '#86efac', borderRadius: 3, borderWidth: 0 },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + fmtM(ctx.raw) } }
+    },
+    scales: {
+      y: {
+        grid: { color: '#F3F4F6' },
+        ticks: { font: { family: 'Montserrat', size: 11 }, callback: v => v + 'M' }
+      },
+      x: { grid: { display: false }, ticks: { font: { size: 12 } } }
+    }
+  }
+});
+</script>
+</body>
+</html>
