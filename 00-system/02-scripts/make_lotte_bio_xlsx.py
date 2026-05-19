@@ -1,0 +1,254 @@
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, numbers
+from openpyxl.utils import get_column_letter
+
+OUTPUT_PATH = r"c:\Users\FURSYS\Downloads\iloom-workspace-claude\50-resources\롯데바이오로직스 공동구매 프로모션 합의서.xlsx"
+
+stores = [
+    {
+        "name": "송도5",
+        "type": "투자형B",
+        "ratio": "6 : 4",
+        "ratio_text": "각 대리점과 본사가 각각 40%(대리점), 60%(본사)의 비율로 분담한다.",
+        "dealer_company": "(주)알루컴 인천점",
+        "dealer_biz_no": "105-85-41701",
+        "dealer_addr": "인천 남동구 인주대로 644",
+        "dealer_rep": "이 종 균",
+    },
+    {
+        "name": "인천중앙2",
+        "type": "일반B",
+        "ratio": "5 : 5",
+        "ratio_text": "각 대리점과 본사가 각각 50%의 비율로 분담한다.",
+        "dealer_company": "(주)알루컴 인천점",
+        "dealer_biz_no": "105-85-41701",
+        "dealer_addr": "인천 남동구 인주대로 644",
+        "dealer_rep": "이 종 균",
+    },
+    {
+        "name": "인천검단",
+        "type": "투자형B",
+        "ratio": "6 : 4",
+        "ratio_text": "각 대리점과 본사가 각각 40%(대리점), 60%(본사)의 비율로 분담한다.",
+        "dealer_company": "일룸 인천 검단점",
+        "dealer_biz_no": "872-03-02670",
+        "dealer_addr": "인천 서구 원당대로 847, 4층",
+        "dealer_rep": "유 종 규",
+    },
+    {
+        "name": "신세계시흥2",
+        "type": "투자형B",
+        "ratio": "6 : 4",
+        "ratio_text": "각 대리점과 본사가 각각 40%(대리점), 60%(본사)의 비율로 분담한다.",
+        "dealer_company": "일룸 신세계시흥",
+        "dealer_biz_no": "133-40-01343",
+        "dealer_addr": "경기도 시흥시 서해안로 699, 2층 (배곧동, 시흥 프리미엄 아울렛)",
+        "dealer_rep": "최 하 은",
+    },
+    {
+        "name": "김포5",
+        "type": "일반B",
+        "ratio": "5 : 5",
+        "ratio_text": "각 대리점과 본사가 각각 50%의 비율로 분담한다.",
+        "dealer_company": "일룸김포점",
+        "dealer_biz_no": "137-17-39033",
+        "dealer_addr": "경기 김포시 풍무동 27-4 1,2층",
+        "dealer_rep": "장 미 영",
+    },
+    {
+        "name": "부천3",
+        "type": "일반B",
+        "ratio": "5 : 5",
+        "ratio_text": "각 대리점과 본사가 각각 50%의 비율로 분담한다.",
+        "dealer_company": "일룸 부천점",
+        "dealer_biz_no": "313-36-00088",
+        "dealer_addr": "경기 부천시 길주로 462",
+        "dealer_rep": "최 민 영",
+    },
+]
+
+# 스타일 정의
+FONT_NAME = "맑은 고딕"
+COLOR_TITLE_BG = "1F3864"   # 진한 남색
+COLOR_ARTICLE_BG = "D6E4F7" # 연한 파란색
+COLOR_SIG_BG = "F2F2F2"     # 연한 회색
+COLOR_WHITE = "FFFFFF"
+COLOR_BLACK = "000000"
+
+thin = Side(style="thin", color=COLOR_BLACK)
+border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+border_bottom = Border(bottom=thin)
+
+def font(size=10, bold=False, color=COLOR_BLACK, name=FONT_NAME):
+    return Font(name=name, size=size, bold=bold, color=color)
+
+def fill(hex_color):
+    return PatternFill("solid", fgColor=hex_color)
+
+def align(h="left", v="center", wrap=True):
+    return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
+
+def write(ws, row, col, value, fnt=None, aln=None, bdr=None, fll=None):
+    cell = ws.cell(row=row, column=col, value=value)
+    if fnt: cell.font = fnt
+    if aln: cell.alignment = aln
+    if bdr: cell.border = bdr
+    if fll: cell.fill = fll
+    return cell
+
+def merge_write(ws, r1, c1, r2, c2, value, fnt=None, aln=None, fll=None, bdr=None):
+    ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+    cell = ws.cell(row=r1, column=c1, value=value)
+    if fnt: cell.font = fnt
+    if aln: cell.alignment = aln
+    if fll: cell.fill = fll
+    if bdr: cell.border = bdr
+    return cell
+
+def build_sheet(wb, store):
+    ws = wb.create_sheet(title=store["name"])
+
+    # 컬럼 너비 설정
+    ws.column_dimensions["A"].width = 5
+    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["C"].width = 60
+
+    # 행 높이 기본값
+    ws.sheet_format.defaultRowHeight = 18
+
+    row = 1
+
+    # ── 제목 ──────────────────────────────────────────
+    ws.row_dimensions[row].height = 36
+    merge_write(ws, row, 1, row, 3,
+                "임직원 할인판매 프로모션 합의서",
+                fnt=font(16, bold=True, color=COLOR_WHITE),
+                aln=align("center", "center"),
+                fll=fill(COLOR_TITLE_BG))
+    row += 1
+
+    # 매장 / 유형 / 분담비율
+    ws.row_dimensions[row].height = 20
+    merge_write(ws, row, 1, row, 3,
+                f"매장: {store['name']}  |  유형: {store['type']}  |  분담비율 (본사:대리점) = {store['ratio']}",
+                fnt=font(10, bold=True, color=COLOR_TITLE_BG),
+                aln=align("center", "center"),
+                fll=fill("EBF3FB"))
+    row += 1
+
+    # 빈 행
+    row += 1
+
+    # ── 머리글 ───────────────────────────────────────
+    ws.row_dimensions[row].height = 30
+    merge_write(ws, row, 1, row, 3,
+                f"본 합의서는 ㈜일룸 (이하 공급업자)과 {store['name']} (이하 대리점) 간에\n"
+                "다음과 같이 롯데바이오로직스 임직원 할인판매 프로모션 관련 진행에 대하여 합의한다.",
+                fnt=font(10),
+                aln=align("left", "center"))
+    row += 1
+
+    ws.row_dimensions[row].height = 18
+    merge_write(ws, row, 1, row, 3, "- 다         음 -",
+                fnt=font(10, bold=True),
+                aln=align("center", "center"))
+    row += 1
+    row += 1  # 빈 행
+
+    # ── 조항 정의 ────────────────────────────────────
+    articles = [
+        ("제1조 [목적]", [
+            ("1)", "이 합의는 롯데바이오로직스 임직원 할인판매 프로모션기간 중 분담금 협의 조건 등을 정함을 목적으로 한다."),
+        ]),
+        ("제2조 [수수료 변경 품목]", [
+            ("1)", "공급업자가 정한 일룸 전체 제품을 수수료 변경 품목으로 한다."),
+            ("2)", "공급품목은 운영 중 상호합의하에 조정할 수 있으며, 계약기간 중 공급품목의 변동은 없으나 불가피한 사유 발생 시 사전 통지 후 공급을 중단할 수 있다."),
+        ]),
+        ("제3조 [판매수수료 및 미수금]", [
+            ("1)", "본 프로모션에 대한 판매수수료율은 「2025년 위탁판매대리점 판매수수료 및 지원금 약정서」에서 정한 판매수수료율을 동일하게 적용한다. 다만, 판매수수료 산정의 기준이 되는 금액은 정상 소비자가(VAT별도)에서 10%를 할인한 금액으로 한다."),
+            ("2)", f"제1항의 10% 할인 금액(VAT 별도)에 대하여는 {store['ratio_text']}"),
+            ("3)", "전항에 따라 발생하는 대리점 부담분은 미수금으로 산정하여 위탁판매수수료(VAT 별도)정산 시 상계 처리하기로 한다. 상기 정산 방식에 대해 설명받고 이에 동의하였음을 상호간에 확인한다."),
+            ("4)", "대리점은 본 조의 내용에 대하여 충분한 설명을 제공받았으며, 이를 명확히 이해한 상태에서 전적으로 자유로운 의사에 따라 본 조항에 동의하였음을 당사자 상호 간에 확인한다."),
+        ]),
+        ("제4조 [프로모션 기간 및 상세내용]", [
+            ("1)", "롯데바이오로직스 임직원 할인판매 프로모션은 일정 기간만 한정 진행되는 건을 대상으로 한다.\n임직원 할인판매 프로모션 적용 기간\n(수주 기준: 2026년 06월 13일 ~ 06월 28일 / 매출 기준: 2026년 06월 13일 ~ 08월 31일)"),
+            ("2)", "롯데바이오로직스 임직원 사원증 및 명함 확인은 필수이며, 구매횟수는 1인 1건으로 제한합니다."),
+        ]),
+        ("제5조 [분쟁해결 및 재판관할]", [
+            ("1)", "이 합의에서 정하지 아니한 사항 또는 이 합의의 내용에 대하여 공급업자와 대리점간 분쟁이 발생한 경우, 공급업자와 대리점의 합의된 의사에 따른다. 공급업자와 대리점사이에 내용 해석과 관련한 합의가 이루어지지 않은 경우 일반 상관례 및 관련 법령에 따른다."),
+            ("2)", "제1항에 의해서도 이 합의와 관련한 분쟁이 해결되지 아니한 경우에는 「대리점거래의 공정화에 관한 법률」 제19조 제1항에 따라 대리점분쟁조정협의회에 조정을 신청할 수 있다. 이 경우에 공급업자와 대리점은 조정절차에 성실하게 임하며, 원활한 분쟁해결을 위해 노력한다."),
+            ("3)", "공급업자와 대리점이 제2항에 따른 조정을 신청하지 아니하는 경우, 이 합의에 관한 분쟁의 해결은 통상의 민사재판에 의하며, 관할은 민사소송법에 따른다."),
+        ]),
+        ("제6조 [합의의 효력 등]", [
+            ("1)", "공급업자와 대리점은 이 합의를 체결하기 전에 충분한 협의를 거쳤고, 합의 내용을 모두 숙지하였으며, 이 합의를 증명하기 위하여 전자계약으로 서명 또는 기명날인하여 각각 1부씩 보관한다."),
+            ("2)", "이 합의서에 기재된 내용만이 공급업자와 대리점 사이에 합의된 내용이며, 이 이외의 내용에 대한 당사자 간의 그 어떠한 구두 합의도 당사자를 구속하지 아니한다."),
+            ("3)", "이 합의서의 내용은 공급업자와 대리점 사이의 서면 합의에 의해서만 변경되거나 수정될 수 있으며, 그 변경 및 수정은 공급업자와 대리점이 해당 서면에 서명 또는 기명날인함과 동시에 그 효력을 발생한다."),
+        ]),
+    ]
+
+    for title, items in articles:
+        # 조항 제목
+        ws.row_dimensions[row].height = 20
+        merge_write(ws, row, 1, row, 3, title,
+                    fnt=font(10, bold=True, color=COLOR_TITLE_BG),
+                    aln=align("left", "center"),
+                    fll=fill(COLOR_ARTICLE_BG))
+        row += 1
+
+        for num, content in items:
+            lines = content.count("\n") + 1
+            ws.row_dimensions[row].height = max(18, lines * 18)
+            write(ws, row, 2, num, fnt=font(10), aln=align("center", "top"))
+            write(ws, row, 3, content, fnt=font(10), aln=align("left", "top", wrap=True))
+            row += 1
+
+        row += 1  # 조항 간 여백
+
+    # ── 날짜 ──────────────────────────────────────────
+    ws.row_dimensions[row].height = 24
+    merge_write(ws, row, 1, row, 3, "2026년          월          일",
+                fnt=font(11, bold=True),
+                aln=align("center", "center"))
+    row += 2
+
+    # ── 서명란 ────────────────────────────────────────
+    for label, company, biz_no, addr, rep in [
+        ("공급업자", "주식회사 일룸", "215-86-93600",
+         "서울특별시 송파구 오금동 45-1 퍼시스빌딩 3층", "정 보 은"),
+        ("대리점", store["dealer_company"], store["dealer_biz_no"],
+         store["dealer_addr"], store["dealer_rep"]),
+    ]:
+        ws.row_dimensions[row].height = 20
+        write(ws, row, 1, f'"{label}"',
+              fnt=font(10, bold=True),
+              aln=align("center", "center"),
+              fll=fill(COLOR_SIG_BG))
+        write(ws, row, 2, "상호 :", fnt=font(10), aln=align("right", "center"), fll=fill(COLOR_SIG_BG))
+        write(ws, row, 3, f"{company}  ( {biz_no} )", fnt=font(10), aln=align("left", "center"))
+        row += 1
+
+        ws.row_dimensions[row].height = 18
+        write(ws, row, 2, "주소 :", fnt=font(10), aln=align("right", "center"), fll=fill(COLOR_SIG_BG))
+        write(ws, row, 3, addr, fnt=font(10), aln=align("left", "center", wrap=True))
+        row += 1
+
+        ws.row_dimensions[row].height = 24
+        write(ws, row, 2, "대표 :", fnt=font(10), aln=align("right", "center"), fll=fill(COLOR_SIG_BG))
+        sig_cell = ws.cell(row=row, column=3,
+                           value=f"{rep}                                          (인)")
+        sig_cell.font = font(10)
+        sig_cell.alignment = align("left", "center")
+        row += 2  # 서명란 간 여백
+
+
+wb = Workbook()
+wb.remove(wb.active)  # 기본 Sheet 제거
+
+for store in stores:
+    build_sheet(wb, store)
+
+wb.save(OUTPUT_PATH)
+print(f"저장 완료: {OUTPUT_PATH}")
