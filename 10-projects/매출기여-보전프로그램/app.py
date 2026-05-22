@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
@@ -355,6 +355,229 @@ async def get_stats():
             FROM orders
         """).fetchone()
     return dict(s)
+
+
+@app.get("/api/stats/by-store")
+async def get_stats_by_store():
+    """매장별 집계 통계"""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                store_name,
+                COUNT(*) as total,
+                SUM(CASE WHEN result_type IN ('full','partial') THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN result_type='rejected' THEN 1 ELSE 0 END) as rejected_cnt,
+                SUM(COALESCE(compensation, 0)) as total_compensation
+            FROM orders
+            GROUP BY store_name
+            ORDER BY total_compensation DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ================================================================
+# 엑셀 내보내기
+# ================================================================
+@app.get("/api/orders/export")
+async def export_orders():
+    """보전금 현황 엑셀 다운로드 (전체 수주 목록 + 매장별 집계)"""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    BRAND_RED = "C80A1E"
+    HEADER_BG = "C80A1E"
+    HEADER_FONT = "FFFFFF"
+    LIGHT_GRAY = "F5F5F5"
+    GREEN_BG = "E8F5E9"
+    YELLOW_BG = "FFF9C4"
+    RED_BG = "FFEBEE"
+
+    thin = Side(style="thin", color="DDDDDD")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def header_style(cell, bold=True):
+        cell.font = Font(name="맑은 고딕", bold=bold, color=HEADER_FONT, size=10)
+        cell.fill = PatternFill("solid", fgColor=HEADER_BG)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+
+    def data_style(cell, bold=False, color=None, align="left"):
+        cell.font = Font(name="맑은 고딕", bold=bold, size=9)
+        if color:
+            cell.fill = PatternFill("solid", fgColor=color)
+        cell.alignment = Alignment(horizontal=align, vertical="center")
+        cell.border = border
+
+    with get_db() as conn:
+        orders = conn.execute("""
+            SELECT o.*, e.event_name
+            FROM orders o
+            LEFT JOIN events e ON o.event_id = e.id
+            ORDER BY o.store_name, o.order_date
+        """).fetchall()
+        store_stats = conn.execute("""
+            SELECT
+                store_name,
+                COUNT(*) as total,
+                SUM(CASE WHEN result_type IN ('full','partial') THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN result_type='rejected' THEN 1 ELSE 0 END) as rejected_cnt,
+                SUM(COALESCE(compensation, 0)) as total_compensation
+            FROM orders
+            GROUP BY store_name
+            ORDER BY total_compensation DESC
+        """).fetchall()
+
+    wb = openpyxl.Workbook()
+
+    # ── 시트 1: 전체 수주 목록 ──
+    ws1 = wb.active
+    ws1.title = "보전금_수주목록"
+    ws1.sheet_view.showGridLines = False
+    ws1.freeze_panes = "A2"
+
+    headers1 = ["No", "매장명", "수주일", "행사명", "고객결제액(원)", "보전금(원)", "결과", "비고"]
+    col_widths1 = [5, 14, 12, 24, 16, 14, 10, 30]
+    ws1.row_dimensions[1].height = 22
+
+    for col, (h, w) in enumerate(zip(headers1, col_widths1), 1):
+        cell = ws1.cell(row=1, column=col, value=h)
+        header_style(cell)
+        ws1.column_dimensions[get_column_letter(col)].width = w
+
+    result_map = {"full": "전체인정", "partial": "부분인정", "rejected": "불인정"}
+    result_color = {"full": GREEN_BG, "partial": YELLOW_BG, "rejected": RED_BG}
+
+    for i, o in enumerate(orders, 1):
+        row = i + 1
+        ws1.row_dimensions[row].height = 18
+        rt = o["result_type"] or ""
+        row_color = result_color.get(rt, None)
+
+        values = [
+            i,
+            o["store_name"],
+            o["order_date"],
+            o["event_name"] or "-",
+            o["customer_amount"],
+            o["compensation"] or 0,
+            result_map.get(rt, "-"),
+            o["note"] or "",
+        ]
+        for col, val in enumerate(values, 1):
+            cell = ws1.cell(row=row, column=col, value=val)
+            is_amount = col in (5, 6)
+            data_style(cell, align="right" if is_amount else ("center" if col in (1, 3, 7) else "left"),
+                       color=row_color if not is_amount else None)
+            if is_amount:
+                cell.number_format = '#,##0'
+                if row_color:
+                    cell.fill = PatternFill("solid", fgColor=row_color)
+
+    # 합계 행
+    total_row = len(orders) + 2
+    ws1.row_dimensions[total_row].height = 20
+    ws1.cell(total_row, 1, "합계").font = Font(name="맑은 고딕", bold=True, size=10)
+    ws1.cell(total_row, 1).alignment = Alignment(horizontal="center", vertical="center")
+    ws1.cell(total_row, 1).fill = PatternFill("solid", fgColor="F0F0F0")
+    ws1.cell(total_row, 1).border = border
+
+    total_amount = sum(o["customer_amount"] for o in orders)
+    total_comp = sum((o["compensation"] or 0) for o in orders)
+    for col in range(2, 9):
+        cell = ws1.cell(total_row, col)
+        if col == 5:
+            cell.value = total_amount
+            cell.number_format = '#,##0'
+            cell.font = Font(name="맑은 고딕", bold=True, size=10)
+        elif col == 6:
+            cell.value = total_comp
+            cell.number_format = '#,##0'
+            cell.font = Font(name="맑은 고딕", bold=True, color=BRAND_RED, size=10)
+        cell.fill = PatternFill("solid", fgColor="F0F0F0")
+        cell.alignment = Alignment(horizontal="right" if col in (5, 6) else "center", vertical="center")
+        cell.border = border
+
+    # ── 시트 2: 매장별 집계 ──
+    ws2 = wb.create_sheet("매장별집계")
+    ws2.sheet_view.showGridLines = False
+
+    # 타이틀
+    ws2.merge_cells("A1:E1")
+    title_cell = ws2["A1"]
+    title_cell.value = "일룸 매출기여 보전 프로그램 — 매장별 집계"
+    title_cell.font = Font(name="맑은 고딕", bold=True, size=13, color=BRAND_RED)
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 28
+
+    # 부제목
+    ws2.merge_cells("A2:E2")
+    sub_cell = ws2["A2"]
+    sub_cell.value = f"출력일: {date.today().strftime('%Y-%m-%d')}  |  적용기간: 2026.05.01 ~ 2027.05.31"
+    sub_cell.font = Font(name="맑은 고딕", size=9, color="888888")
+    sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[2].height = 16
+
+    headers2 = ["매장명", "전체건수", "인정건수", "불인정건수", "보전금합계(원)"]
+    col_widths2 = [16, 12, 12, 12, 18]
+    ws2.row_dimensions[3].height = 22
+
+    for col, (h, w) in enumerate(zip(headers2, col_widths2), 1):
+        cell = ws2.cell(row=3, column=col, value=h)
+        header_style(cell)
+        ws2.column_dimensions[get_column_letter(col)].width = w
+
+    for i, s in enumerate(store_stats, 1):
+        row = i + 3
+        ws2.row_dimensions[row].height = 18
+        bg = LIGHT_GRAY if i % 2 == 0 else "FFFFFF"
+        vals = [s["store_name"], s["total"], s["approved_cnt"], s["rejected_cnt"], s["total_compensation"]]
+        for col, val in enumerate(vals, 1):
+            cell = ws2.cell(row=row, column=col, value=val)
+            is_amount = col == 5
+            data_style(cell, align="right" if is_amount else ("center" if col > 1 else "left"), color=bg)
+            if is_amount:
+                cell.number_format = '#,##0'
+                if s["total_compensation"] > 0:
+                    cell.font = Font(name="맑은 고딕", bold=True, color=BRAND_RED, size=9)
+                cell.fill = PatternFill("solid", fgColor=bg)
+
+    # 합계 행
+    total_row2 = len(store_stats) + 4
+    ws2.row_dimensions[total_row2].height = 20
+    totals2 = [
+        "합계",
+        sum(s["total"] for s in store_stats),
+        sum(s["approved_cnt"] for s in store_stats),
+        sum(s["rejected_cnt"] for s in store_stats),
+        sum(s["total_compensation"] for s in store_stats),
+    ]
+    for col, val in enumerate(totals2, 1):
+        cell = ws2.cell(total_row2, col, val)
+        cell.font = Font(name="맑은 고딕", bold=True, size=10,
+                         color=BRAND_RED if col == 5 else "333333")
+        cell.fill = PatternFill("solid", fgColor="F0F0F0")
+        cell.alignment = Alignment(
+            horizontal="right" if col == 5 else ("center" if col > 1 else "left"),
+            vertical="center"
+        )
+        cell.border = border
+        if col == 5:
+            cell.number_format = '#,##0'
+
+    # 저장
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    from urllib.parse import quote
+    filename_raw = f"iloom_보전금현황_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename_encoded = quote(filename_raw, safe="")
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename_encoded}"}
+    )
 
 
 if __name__ == "__main__":

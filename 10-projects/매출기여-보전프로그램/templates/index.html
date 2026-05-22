@@ -272,11 +272,20 @@
   <div x-show="activeTab === 'results'" x-cloak>
     <div class="flex justify-between items-center mb-4">
       <h2 class="font-semibold text-gray-700">수주 처리 결과</h2>
-      <div class="flex gap-2 text-xs">
-        <button @click="filterType=''" :class="filterType==='' ? 'text-brand font-semibold' : 'text-gray-500'" class="hover:text-brand">전체</button>
-        <button @click="filterType='full'" :class="filterType==='full' ? 'text-green-600 font-semibold' : 'text-gray-500'" class="hover:text-green-600">전체인정</button>
-        <button @click="filterType='partial'" :class="filterType==='partial' ? 'text-yellow-600 font-semibold' : 'text-gray-500'" class="hover:text-yellow-600">부분인정</button>
-        <button @click="filterType='rejected'" :class="filterType==='rejected' ? 'text-red-500 font-semibold' : 'text-gray-500'" class="hover:text-red-500">불인정</button>
+      <div class="flex items-center gap-3">
+        <div class="flex gap-2 text-xs">
+          <button @click="filterType=''" :class="filterType==='' ? 'text-brand font-semibold' : 'text-gray-500'" class="hover:text-brand">전체</button>
+          <button @click="filterType='full'" :class="filterType==='full' ? 'text-green-600 font-semibold' : 'text-gray-500'" class="hover:text-green-600">전체인정</button>
+          <button @click="filterType='partial'" :class="filterType==='partial' ? 'text-yellow-600 font-semibold' : 'text-gray-500'" class="hover:text-yellow-600">부분인정</button>
+          <button @click="filterType='rejected'" :class="filterType==='rejected' ? 'text-red-500 font-semibold' : 'text-gray-500'" class="hover:text-red-500">불인정</button>
+        </div>
+        <button @click="exportExcel()"
+          class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          엑셀 내보내기
+        </button>
       </div>
     </div>
 
@@ -338,6 +347,102 @@
               <td colspan="7" class="text-center py-10 text-gray-400">데이터가 없습니다</td>
             </tr>
           </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===============================
+       TAB 4: 매장별 집계
+  ================================ -->
+  <div x-show="activeTab === 'dashboard'" x-cloak>
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="font-semibold text-gray-700">매장별 보전금 집계</h2>
+      <button @click="exportExcel()"
+        class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        엑셀 내보내기
+      </button>
+    </div>
+
+    <!-- 매장별 카드 그리드 -->
+    <template x-if="storeStats.length === 0">
+      <div class="text-center py-12 text-gray-400 bg-white rounded border border-gray-200">
+        수주 데이터가 없습니다.
+      </div>
+    </template>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <template x-for="s in storeStats" :key="s.store_name">
+        <div class="bg-white rounded border border-gray-200 p-4 hover:shadow-sm transition-shadow">
+          <div class="flex justify-between items-start mb-3">
+            <span class="font-semibold text-gray-800" x-text="s.store_name"></span>
+            <span class="text-xs text-gray-400" x-text="'전체 ' + s.total + '건'"></span>
+          </div>
+          <div class="text-2xl font-bold text-brand mb-1"
+               x-text="'₩' + (s.total_compensation || 0).toLocaleString('ko-KR')"></div>
+          <div class="text-xs text-gray-400 mb-3">누적 보전금</div>
+          <!-- 프로그레스 바 -->
+          <div class="w-full bg-gray-100 rounded-full h-1.5 mb-2">
+            <div class="bg-brand h-1.5 rounded-full transition-all"
+                 :style="'width:' + (s.total > 0 ? Math.round(s.approved_cnt / s.total * 100) : 0) + '%'"></div>
+          </div>
+          <div class="flex justify-between text-xs text-gray-500">
+            <span>
+              <span class="text-green-600 font-medium" x-text="s.approved_cnt + '건 인정'"></span>
+            </span>
+            <span>
+              <span class="text-red-500 font-medium" x-text="s.rejected_cnt + '건 불인정'"></span>
+            </span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- 매장별 상세 테이블 -->
+    <div class="bg-white rounded border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <tr>
+            <th class="px-4 py-3 text-left">매장명</th>
+            <th class="px-4 py-3 text-center">전체건수</th>
+            <th class="px-4 py-3 text-center">인정건수</th>
+            <th class="px-4 py-3 text-center">불인정건수</th>
+            <th class="px-4 py-3 text-right">누적 보전금</th>
+            <th class="px-4 py-3 text-center">인정률</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <template x-for="s in storeStats" :key="s.store_name">
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3 font-medium" x-text="s.store_name"></td>
+              <td class="px-4 py-3 text-center text-gray-600" x-text="s.total"></td>
+              <td class="px-4 py-3 text-center text-green-600 font-medium" x-text="s.approved_cnt"></td>
+              <td class="px-4 py-3 text-center text-red-500" x-text="s.rejected_cnt"></td>
+              <td class="px-4 py-3 text-right font-bold text-brand"
+                  x-text="(s.total_compensation || 0) > 0 ? '₩' + (s.total_compensation).toLocaleString('ko-KR') : '-'"></td>
+              <td class="px-4 py-3 text-center">
+                <span class="text-xs font-medium"
+                  :class="s.total > 0 && s.approved_cnt / s.total >= 0.7 ? 'text-green-600' : 'text-gray-500'"
+                  x-text="s.total > 0 ? Math.round(s.approved_cnt / s.total * 100) + '%' : '-'"></span>
+              </td>
+            </tr>
+          </template>
+          <!-- 합계 행 -->
+          <tr class="bg-gray-50 font-semibold text-sm" x-show="storeStats.length > 0">
+            <td class="px-4 py-3">합계</td>
+            <td class="px-4 py-3 text-center" x-text="storeStats.reduce((a,s)=>a+s.total,0)"></td>
+            <td class="px-4 py-3 text-center text-green-600" x-text="storeStats.reduce((a,s)=>a+s.approved_cnt,0)"></td>
+            <td class="px-4 py-3 text-center text-red-500" x-text="storeStats.reduce((a,s)=>a+s.rejected_cnt,0)"></td>
+            <td class="px-4 py-3 text-right text-brand"
+                x-text="'₩' + storeStats.reduce((a,s)=>a+(s.total_compensation||0),0).toLocaleString('ko-KR')"></td>
+            <td class="px-4 py-3 text-center text-xs text-gray-500">
+              <span x-text="storeStats.reduce((a,s)=>a+s.total,0) > 0
+                ? Math.round(storeStats.reduce((a,s)=>a+s.approved_cnt,0) / storeStats.reduce((a,s)=>a+s.total,0) * 100) + '%'
+                : '-'"></span>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -421,11 +526,13 @@ function app() {
       { id: 'events', label: '행사 관리' },
       { id: 'orders', label: '수주 입력' },
       { id: 'results', label: '결과 조회' },
+      { id: 'dashboard', label: '매장별 집계' },
     ],
     config: { series: [], categories: [] },
     events: [],
     orders: [],
     stats: {},
+    storeStats: [],
     filterType: '',
     showEventModal: false,
     submitting: false,
@@ -442,7 +549,7 @@ function app() {
     },
 
     async init() {
-      await Promise.all([this.loadConfig(), this.loadEvents(), this.loadOrders(), this.loadStats()]);
+      await Promise.all([this.loadConfig(), this.loadEvents(), this.loadOrders(), this.loadStats(), this.loadStoreStats()]);
     },
 
     async loadConfig() {
@@ -460,6 +567,15 @@ function app() {
     async loadStats() {
       const r = await fetch('/api/stats');
       this.stats = await r.json();
+    },
+    async loadStoreStats() {
+      const r = await fetch('/api/stats/by-store');
+      this.storeStats = await r.json();
+    },
+
+    async exportExcel() {
+      this.showToast('엑셀 다운로드 중...');
+      window.location.href = '/api/orders/export';
     },
 
     get filteredOrders() {
@@ -526,7 +642,7 @@ function app() {
         const data = await r.json();
         if (r.ok) {
           this.lastResult = data;
-          await Promise.all([this.loadOrders(), this.loadStats()]);
+          await Promise.all([this.loadOrders(), this.loadStats(), this.loadStoreStats()]);
           this.showToast(data.message);
         } else {
           this.showToast(data.detail || '처리 실패', 'error');
@@ -539,7 +655,7 @@ function app() {
     async deleteOrder(id) {
       if (!confirm('수주 건을 삭제하시겠습니까?')) return;
       await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      await Promise.all([this.loadOrders(), this.loadStats()]);
+      await Promise.all([this.loadOrders(), this.loadStats(), this.loadStoreStats()]);
       this.showToast('삭제 완료');
     },
 
