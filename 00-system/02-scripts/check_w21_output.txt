@@ -1,0 +1,19 @@
+﻿W21 버전: 48
+
+=== W21 담당자 목록 ===
+행1: <strong>지역</strong> | []
+행2: 수도권 1지역 | ['윤관중']
+행3: 수도권 2지역 | ['황아영']
+행4: 수도권 4지역 | ['이다혜']
+행5: 충청 | ['충청', '최지연']
+행6: 호남 / 경기 | ['원혜선']
+행7: 대구 / 강원 | ['김효진']
+행8: 영남 | ['영남', '서다솔']
+행9: 영업지원 | ['영업지원', '이선애']
+행10: 영업지원 | ['영업지원', '조경아']
+
+=== W21 서다솔 행 ===
+지역: 영남
+매장: ['거제/김해/롯데동부산/마산/양산/연제/좌천/진주/창원/하단/LHX창원', '<ac:structured-macro ac:name="status" ac:schema-version="1" ac:macro-id="ds-w21-07"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">진행예정</ac:parameter></ac:structured-macro> 현대목동점 계약정서 오류 수정 완료</p><p><ac:structured-macro ac:name="status" ac:schema-version="1" ac:macro-id="ds-w21-08"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">진행예정</ac:parameter></ac:structured-macro> 온오프 보전 시스템 개발 진행']
+행 앞 400자:
+<tr><td class="numberingColumn">8</td><td><p style="text-align: center;">영남</p></td><td><p>거제/김해/롯데동부산/마산/양산/연제/좌천/진주/창원/하단/LHX창원</p></td><td><p style="text-align: center;">서다솔</p></td><td><p><ac:structured-macro ac:name="status" ac:schema-version="1" ac:macro-id="ds-w21-01"><ac:parameter ac:name="colour">Blue</ac:parameter><ac:parameter ac:name="title">완료</ac:parameter></ac:structured-macro> 온오프 

@@ -1,0 +1,15 @@
+﻿서다솔 총 3개 발견: [48143, 67632, 70231]
+
+=== 서다솔 행 1 (위치 48143) ===
+지역: 영남
+행 길이: 7350
+<tr><td class="numberingColumn">8</td><td><p style="text-align: center;">영남</p></td><td><p>거제/김해/롯데동부산/마산/양산/연제/좌천/진주/창원/하단/LHX창원</p></td><td><p style="text-align: center;">서다솔</p></td><td><p><ac:structured-macro ac:name="status" ac:schema-version="1" ac:macro-id="225b46db-01ac-41ef-b348-c223e426da6
+
+=== 서다솔 행 2 (위치 67632) ===
+지역: 영남
+행 길이: 1408
+<tr><td><p style="text-align: center;">영남</p></td><td><p style="text-align: center;">서다솔</p></td><td><p><strong>기간: 5/22(월)~5/28(일) 기준</strong><br /><strong>1.롯데동부산점 79백(전년대비 111.4%, 전주대비 -29.4%)</strong></p><ul><li><p>집객팀수: 80팀, 견적건수: 53건, 수주건수: 30건</p></li><li><p>pos매출 주간: 83백만, 월 누적: 296백만</p></l
+
+=== 서다솔 행 3 (위치 70231) ===
+행 길이: 1907
+<tr><td><p class="media-group"><ac:structured-macro ac:name="view-file" ac:schema-version="1" ac:macro-id="1733bd34-939b-429c-81b4-f8d8946d1d59"><ac:parameter ac:name="name"><ri:attachment ri:filename="결산회의 양식 이다혜.xlsx" ri:version-at-save="2" /></ac:parameter></ac:structured-macro><ac:structured-mac

@@ -1,0 +1,21 @@
+﻿버전: 64
+
+=== '수도권' 발견 (위치 1346) ===
+<tr><td class="numberingColumn">2</td><td><p style="text-align: center;">수도권 1지역</p><p style="text-align: center;">(경기 중부 / 서울)</p></td><td><p>신세계시흥/롯데광명/안산상록수/의왕/평촌/안양/강동/태릉묵동/구리남양주/의정부</p></td><td><p style="text-align: center;">윤관중</p></td><td><p><ac:structured-macro ac:name="status" ac:schema-version="1" ac:macro-id="450399aa-6172-4aa4-9fcb-7caeced16475"><ac:parameter ac:name="title">지속 진행중</ac:parameter><ac:parameter ac:name="colour">Blue</ac:parameter></ac:structured-macro>프로모션 TF [주 1회 정기미팅]</p><ac:task-list>
+<ac:task>
+<ac:task-id>1</ac:task-id>
+<ac:task-status>complete</ac:task-status>
+
+
+
+=== 전체 담당자 목록 ===
+행1: <strong>지역</strong> | 이름: []
+행2: 수도권 1지역 | 이름: ['윤관중']
+행3: 수도권 2지역 | 이름: ['황아영']
+행4: 수도권 4지역 | 이름: ['이다혜']
+행5: 충청 | 이름: ['충청', '최지연']
+행6: 호남 / 경기 | 이름: ['원혜선']
+행7: 대구 / 강원 | 이름: ['김효진']
+행8: 영남 | 이름: ['영남', '서다솔']
+행9: 영업지원 | 이름: ['영업지원', '이선애']
+행10: 영업지원 | 이름: ['영업지원', '조경아']

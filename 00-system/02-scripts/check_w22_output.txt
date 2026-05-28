@@ -1,0 +1,10 @@
+﻿버전: 64, HTML 길이: 71173
+서다솔 위치: 48143
+ul></td><td><p /></td></tr><tr><td class="numberingColumn">8</td><td><p style="text-align: center;">영남</p></td><td><p>거제/김해/롯데동부산/마산/양산/연제/좌천/진주/창원/하단/LHX창원</p></td><td><p style="text-align: center;">서다솔</p></td><td><p><ac:structured-macro ac:name="status" ac:schema-version="1" ac:macro-id="225b46db-01ac-41ef-b348-c223e426da67"><ac:parameter ac:name="title">진행중</ac:parameter><ac:parameter ac:name="colour">Yellow</ac:parameter></ac:structured-macro> 부산지역 베이비페어 준비</p><ac:task-list>
+<ac:task>
+<ac:task-id>33</ac:task-id>
+<ac:task-status>complete</ac:task-status>
+<ac:task-body><span class="placeholder-inline-tasks">프로모션/ 판촉물 기획</span></ac:task-body>
+</ac:task>
+<ac:task>
+<ac:task-id>34</ac:task-id

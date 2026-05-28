@@ -1,0 +1,25 @@
+﻿버전: 11
+
+=== TR[0] (18985~19702, 717자) ===
+<tr ac:local-id="581a6e0b-3160-43aa-a228-7674f04656f4"><td rowspan="7" ac:local-id="c8e53f2c-1bb5-4351-86f7-1beda369d0bd"><p local-id="14206080-b56f-42ad-9fcc-581d5b438e1d" style="text-align: center;">서다솔</p></td><td rowspan="5" ac:local-id="015fcbbc-0bc7-4527-9755-bba8f9438740"><p local-id="564285e4-b045-4a2c-a060-61bc9fea4fe6" style="text-align: center;">매장 업무</p></td><td ac:local-id="3596dc9e-a
+
+=== TR[1] (19702~20101, 399자) ===
+<tr ac:local-id="1a5d653b-8d26-4282-a4a8-02d33f8635bf"><td ac:local-id="005af040-0538-4884-8ff0-7586812fbb06"><p local-id="26621b0e-c332-4056-aca3-5d92bd3364e0" /></td><td ac:local-id="f3ab6706-0ad9-4512-b9a8-bb864241c0f4"><p local-id="837e4d65-21af-48da-9366-8e3cd926a2f4" /></td><td ac:local-id="3de63f28-ae61-430e-91ee-28a024cc8801"><p local-id="abf459e6-1605-46fc-b29d-ff227a391548" /></td></tr>
+
+=== TR[2] (20101~20500, 399자) ===
+<tr ac:local-id="3b6bc972-b06c-4bed-bd29-3903bb130fbd"><td ac:local-id="3fd724e9-b467-4d4b-81e6-143b465847b8"><p local-id="cc689b01-6de5-47d9-baed-543cc5ee5b21" /></td><td ac:local-id="4519ee72-102d-4a1a-9633-8d7f81dfc89e"><p local-id="d39eb6f0-40af-4444-842b-3299e9517635" /></td><td ac:local-id="a311d9e3-3eda-4bfd-83e4-2235c3ce36a1"><p local-id="5e1b30d5-e1fe-4756-8c46-90e98dbf320d" /></td></tr>
+
+=== TR[3] (20500~20899, 399자) ===
+<tr ac:local-id="47834ae3-a25f-4c8d-833e-a0c6e9528d6a"><td ac:local-id="c4e31be8-49fe-414a-aeb2-65c54c2f8c6e"><p local-id="013764a3-2222-437a-9f67-8a010fc244c4" /></td><td ac:local-id="1cae35f9-f573-4f6b-8e55-6f1086ed6da2"><p local-id="6099c5a2-b19c-4f52-b17c-f40c389ca22c" /></td><td ac:local-id="1dab4a2a-4893-416c-99b7-8d6dcdd60cff"><p local-id="a27a3bfe-3cce-42db-b2ca-52ba7376fec2" /></td></tr>
+
+=== TR[4] (20899~21298, 399자) ===
+<tr ac:local-id="bf875310-ba64-46f7-b14f-831dce6c1440"><td ac:local-id="2dc0572f-c14e-45ae-a8b7-e8b0d44897d8"><p local-id="7a446f4f-73fc-4ae0-a91f-12349734354b" /></td><td ac:local-id="37b11707-4e1a-4869-a7a0-851fb6441295"><p local-id="e98b9aa2-e917-4100-ad52-9e636dbeb010" /></td><td ac:local-id="f35533f6-3bd9-413d-8ac6-79a938bfccda"><p local-id="9fd9ee75-40f4-423b-b728-90347ff72bd9" /></td></tr>
+
+=== TR[5] (21298~21857, 559자) ===
+<tr ac:local-id="8c3c0fdb-80dd-4d6e-8052-9e7e860fc5af"><td rowspan="2" ac:local-id="d7be7985-66bf-46ef-b0d9-c2f16ce2f74f"><p local-id="37832a6d-5251-4492-9be1-5f412aeb592d" style="text-align: center;">기타 업무</p></td><td ac:local-id="c5ab4ae9-1931-4cba-8dc1-fcb3192929af"><p local-id="22a80e56-148f-4b83-9305-afb8ca84ab76" /></td><td ac:local-id="8764a136-95ce-4d72-9a18-bb2d3903ae2d"><p local-id="e537
+
+=== TR[6] (21857~22256, 399자) ===
+<tr ac:local-id="3cefb9ec-6879-4d72-b090-394014d5b42b"><td ac:local-id="138497a4-1467-494e-b052-15f54db87925"><p local-id="4816a6eb-e160-4d54-b6ad-76ac9b6ba22b" /></td><td ac:local-id="53215560-ee6d-4076-80c2-271e5e863d9c"><p local-id="feb140bd-868a-41ef-a7dc-b4398ff07437" /></td><td ac:local-id="79227485-ce06-4129-bd78-0f6a81ade39d"><p local-id="16ed8980-7980-42a0-b27c-03d71489378e" /></td></tr>
+
+=== TR[7] (22256~25202, 2946자) ===
+<tr ac:local-id="535d8c4d-44f9-411e-a746-b4dc77759cec"><td rowspan="8" ac:local-id="a113b864-eafa-40cb-9783-47ba61608c53"><p local-id="5b50c4d9-b10b-498d-b03c-64a4860da563" style="text-align: center;">김지수</p></td><td rowspan="4" ac:local-id="8a7d4277-8f60-4d74-b965-0807cfe21f0a"><p local-id="c8d6e172-93ee-4232-b297-fd7c7aed4416" style="text-align: center;">매장 업무</p></td><td ac:local-id="f01cfb7f-d
