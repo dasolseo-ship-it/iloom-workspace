@@ -2,6 +2,8 @@
 매출기여 보전 프로그램
 온라인 행사로 인한 오프라인 수주 취소건 보전금 관리
 """
+import re
+import json
 import sqlite3
 import io
 from datetime import date, timedelta
@@ -37,6 +39,18 @@ CATEGORIES = [
     "서랍장", "화장대", "거울", "선반", "책장", "식탁",
     "파티션", "기타",
 ]
+
+# 온라인 채널 분류 기준
+ONLINE_STORES = frozenset([
+    '네이버', '일룸쇼핑몰', '쿠팡', '쿠팡로켓', '엘롯데', 'LG홈스타일',
+    'EB', 'AS', '온라인사업부',
+])
+
+# 담당 오프라인 매장 (CLAUDE.md 기준)
+MY_STORES = frozenset([
+    '송도5', '인천검단', '인천중앙2', '김포5', '부천3', '의정부8', '신세계시흥2',
+    '현대목동', '롯데구리', '롯데인천2', '롯데영등포',
+])
 
 # 쿠시노 ≠ 쿠시노코지, 로이 ≠ 로이모노
 EXCLUSION_RULES: dict[str, list[str]] = {
@@ -102,6 +116,46 @@ def init_db():
                 category TEXT NOT NULL,
                 match_status TEXT DEFAULT 'pending'
             );
+
+            CREATE TABLE IF NOT EXISTS erp_orders (
+                order_no TEXT PRIMARY KEY,
+                order_base TEXT NOT NULL,
+                order_seq INTEGER NOT NULL DEFAULT 0,
+                store_name TEXT NOT NULL,
+                store_type TEXT NOT NULL,
+                order_status TEXT NOT NULL,
+                customer_name TEXT DEFAULT '',
+                order_date TEXT,
+                delivery_date TEXT,
+                amount REAL DEFAULT 0,
+                address_dong TEXT,
+                phone_last4 TEXT,
+                cancel_type TEXT,
+                import_date TEXT DEFAULT (date('now', 'localtime'))
+            );
+
+            CREATE TABLE IF NOT EXISTS matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                offline_order_no TEXT NOT NULL,
+                online_order_no TEXT NOT NULL,
+                event_id INTEGER REFERENCES events(id),
+                match_keys TEXT,
+                match_confidence TEXT DEFAULT 'medium',
+                result_type TEXT,
+                compensation REAL DEFAULT 0,
+                status TEXT DEFAULT 'pending',
+                created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            );
+
+            CREATE TABLE IF NOT EXISTS match_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+                product_name TEXT DEFAULT '',
+                series TEXT NOT NULL,
+                category TEXT NOT NULL,
+                amount REAL DEFAULT 0,
+                match_status TEXT DEFAULT 'pending'
+            );
         """)
 
 
@@ -109,7 +163,102 @@ init_db()
 
 
 # ================================================================
-# 매칭 로직
+# ERP 헬퍼 함수
+# ================================================================
+def extract_customer_name(order_name: str) -> str:
+    """수주건명에서 고객명 추출. 예) (온라인택배)이상이(이*름) → 이상이"""
+    if not order_name:
+        return ""
+    s = re.sub(r'^(\([^)]*\)\s*)+', '', order_name.strip())
+    m = re.match(r'^([가-힣]{2,4})(?:\(|$)', s)
+    return m.group(1) if m else ""
+
+
+def parse_order_no(order_no: str) -> tuple[str, int]:
+    """I20260529-0088-01 → ('I20260529-0088', 1)"""
+    m = re.match(r'^(.*)-(\d+)$', str(order_no).strip())
+    if m:
+        return m.group(1), int(m.group(2))
+    return order_no, 0
+
+
+def classify_cancel_types(conn):
+    """취소건을 date_change / pure_cancel 로 분류"""
+    all_rows = conn.execute(
+        "SELECT order_no, order_base, order_seq FROM erp_orders"
+    ).fetchall()
+
+    base_max: dict[str, int] = {}
+    for r in all_rows:
+        b = r["order_base"]
+        if b not in base_max or r["order_seq"] > base_max[b]:
+            base_max[b] = r["order_seq"]
+
+    for r in conn.execute(
+        "SELECT order_no, order_base, order_seq FROM erp_orders WHERE order_status='취소'"
+    ).fetchall():
+        ct = "date_change" if r["order_seq"] < base_max.get(r["order_base"], 0) else "pure_cancel"
+        conn.execute("UPDATE erp_orders SET cancel_type=? WHERE order_no=?", (ct, r["order_no"]))
+
+
+def run_matching_engine(conn) -> int:
+    """오프라인 순수취소건 ↔ 온라인 수주건 자동 매칭"""
+    events = conn.execute("SELECT * FROM events ORDER BY announcement_date").fetchall()
+
+    offline_cancels = conn.execute("""
+        SELECT * FROM erp_orders
+        WHERE store_type='offline'
+        AND cancel_type='pure_cancel'
+        AND customer_name != ''
+        AND address_dong IS NOT NULL
+    """).fetchall()
+
+    matched = 0
+    for oc in offline_cancels:
+        for ev in events:
+            if (oc["order_date"] or "") >= ev["announcement_date"]:
+                continue
+
+            online_orders = conn.execute("""
+                SELECT * FROM erp_orders
+                WHERE store_type='online'
+                AND order_status='수주'
+                AND customer_name=?
+                AND address_dong=?
+                AND order_date >= ?
+                AND order_date <= ?
+            """, (oc["customer_name"], oc["address_dong"],
+                  ev["start_date"], ev["end_date"])).fetchall()
+
+            for oo in online_orders:
+                exists = conn.execute(
+                    "SELECT 1 FROM matches WHERE offline_order_no=? AND online_order_no=?",
+                    (oc["order_no"], oo["order_no"])
+                ).fetchone()
+                if exists:
+                    continue
+
+                keys = ["customer_name", "address_dong"]
+                if oc["phone_last4"] and oo["phone_last4"] and oc["phone_last4"] == oo["phone_last4"]:
+                    keys.append("phone_last4")
+
+                conn.execute("""
+                    INSERT INTO matches
+                    (offline_order_no, online_order_no, event_id, match_keys, match_confidence, compensation)
+                    VALUES (?,?,?,?,?,?)
+                """, (
+                    oc["order_no"], oo["order_no"], ev["id"],
+                    json.dumps(keys, ensure_ascii=False),
+                    "high" if len(keys) >= 3 else "medium",
+                    round((oc["amount"] or 0) * 0.05, 0),
+                ))
+                matched += 1
+
+    return matched
+
+
+# ================================================================
+# 기존 매칭 로직
 # ================================================================
 def is_same_series(s1: str, s2: str) -> bool:
     s1, s2 = s1.strip(), s2.strip()
@@ -170,6 +319,36 @@ class OrderIn(BaseModel):
     customer_amount: float
     event_id: int
     products: List[ProductIn]
+
+
+class MatchStatusUpdate(BaseModel):
+    status: str
+
+
+class MatchProductIn(BaseModel):
+    product_name: str = ""
+    series: str
+    category: str
+    amount: float = 0
+
+
+def calc_result_by_product(matched: list[dict]) -> tuple[str, float, str]:
+    """품목별 금액 기반 (result_type, compensation, note) 계산"""
+    approved = [p for p in matched if p["match_status"] == "approved"]
+    rejected = [p for p in matched if p["match_status"] == "rejected"]
+
+    if not approved:
+        return "rejected", 0.0, ""
+
+    approved_amount = sum(p.get("amount", 0) for p in approved)
+    compensation = round(approved_amount * 0.05, 0)
+
+    if not rejected:
+        return "full", compensation, ""
+
+    note = (f"부분인정 ({len(approved)}/{len(matched)}개 상품) "
+            f"| 인정 금액 ₩{approved_amount:,.0f}")
+    return "partial", compensation, note
 
 
 # ================================================================
@@ -578,6 +757,235 @@ async def export_orders():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename_encoded}"}
     )
+
+
+# ================================================================
+# ERP 수주 API
+# ================================================================
+@app.post("/api/erp/upload")
+async def upload_erp(file: UploadFile = File(...)):
+    """ERP 수주 Excel 업로드 → 자동 분류 + 매칭"""
+    import openpyxl
+    content = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    ws = wb.active
+
+    headers = [str(c.value).strip() if c.value else "" for c in ws[1]]
+
+    required = ["대리점", "수주번호", "수주상태", "주문일자", "수주건별금액", "납품처주소", "수주건명"]
+    missing = [h for h in required if h not in headers]
+    if missing:
+        raise HTTPException(400, f"필수 컬럼 없음: {missing}")
+
+    def ci(name: str) -> int | None:
+        try:
+            return headers.index(name)
+        except ValueError:
+            return None
+
+    i_store = ci("대리점")
+    i_no = ci("수주번호")
+    i_status = ci("수주상태")
+    i_name = ci("수주건명")
+    i_date = ci("주문일자")
+    i_delivery = ci("확정납기")
+    i_amount = ci("수주건별금액")
+    i_addr = ci("납품처주소")
+
+    def to_date(v) -> str | None:
+        if v is None:
+            return None
+        if hasattr(v, "strftime"):
+            return v.strftime("%Y-%m-%d")
+        return str(v)[:10]
+
+    inserted = skipped = 0
+    with get_db() as conn:
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            order_no = row[i_no]
+            store = row[i_store]
+            if not order_no or not store:
+                continue
+
+            order_no = str(order_no).strip()
+            store = str(store).strip()
+            status = str(row[i_status]).strip() if row[i_status] else ""
+            order_name = str(row[i_name]).strip() if row[i_name] else ""
+            customer_name = extract_customer_name(order_name)
+            base, seq = parse_order_no(order_no)
+            store_type = "online" if store in ONLINE_STORES else "offline"
+            order_date = to_date(row[i_date])
+            delivery_date = to_date(row[i_delivery]) if i_delivery is not None else None
+            amount = float(row[i_amount]) if row[i_amount] else 0.0
+            address = str(row[i_addr]).strip() if row[i_addr] else None
+
+            try:
+                conn.execute("""
+                    INSERT OR REPLACE INTO erp_orders
+                    (order_no, order_base, order_seq, store_name, store_type, order_status,
+                     customer_name, order_date, delivery_date, amount, address_dong)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                """, (order_no, base, seq, store, store_type, status,
+                      customer_name, order_date, delivery_date, amount, address))
+                inserted += 1
+            except Exception:
+                skipped += 1
+
+        classify_cancel_types(conn)
+        matched = run_matching_engine(conn)
+
+    return {
+        "message": f"{inserted}건 처리, 취소분류 완료, 신규 매칭 {matched}건 발견",
+        "inserted": inserted,
+        "skipped": skipped,
+        "matched": matched,
+    }
+
+
+@app.get("/api/erp/orders")
+async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = ""):
+    with get_db() as conn:
+        q = "SELECT * FROM erp_orders WHERE 1=1"
+        params: list = []
+        if store_type:
+            q += " AND store_type=?"; params.append(store_type)
+        if status:
+            q += " AND order_status=?"; params.append(status)
+        if cancel_type:
+            q += " AND cancel_type=?"; params.append(cancel_type)
+        q += " ORDER BY order_date DESC, order_no"
+        rows = conn.execute(q, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/erp/stats")
+async def erp_stats():
+    with get_db() as conn:
+        cancel_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline' AND cancel_type='pure_cancel'"
+        ).fetchone()["c"]
+        match_cnt = conn.execute("SELECT COUNT(*) as c FROM matches").fetchone()["c"]
+        approved_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM matches WHERE status='approved'"
+        ).fetchone()["c"]
+        total_comp = conn.execute(
+            "SELECT COALESCE(SUM(compensation),0) as s FROM matches WHERE status='approved'"
+        ).fetchone()["s"]
+    return {
+        "total_cancels": cancel_cnt,
+        "total_matches": match_cnt,
+        "approved_matches": approved_cnt,
+        "total_compensation": total_comp,
+    }
+
+
+@app.post("/api/erp/run-match")
+async def trigger_match():
+    with get_db() as conn:
+        matched = run_matching_engine(conn)
+    return {"message": f"매칭 실행 완료: 신규 {matched}건 발견"}
+
+
+# ================================================================
+# 매칭 결과 API
+# ================================================================
+@app.get("/api/matches")
+async def list_matches():
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                m.id, m.offline_order_no, m.online_order_no,
+                m.match_keys, m.match_confidence, m.result_type,
+                m.compensation, m.status, m.created_at,
+                off.store_name  AS offline_store,
+                off.customer_name,
+                off.address_dong,
+                off.order_date  AS offline_date,
+                off.amount      AS offline_amount,
+                on_.store_name  AS online_store,
+                on_.order_date  AS online_date,
+                on_.amount      AS online_amount,
+                e.event_name
+            FROM matches m
+            JOIN erp_orders off ON m.offline_order_no = off.order_no
+            JOIN erp_orders on_ ON m.online_order_no  = on_.order_no
+            LEFT JOIN events e  ON m.event_id = e.id
+            ORDER BY m.created_at DESC
+        """).fetchall()
+
+        result = []
+        for r in rows:
+            d = dict(r)
+            items = conn.execute(
+                "SELECT * FROM match_items WHERE match_id=? ORDER BY id", (r["id"],)
+            ).fetchall()
+            d["items"] = [dict(i) for i in items]
+            result.append(d)
+    return result
+
+
+@app.post("/api/matches/{match_id}/products")
+async def verify_match_products(match_id: int, products: List[MatchProductIn]):
+    """오프라인 취소 품목 입력 → 행사 품목과 매칭 → 보전금 계산"""
+    if not products:
+        raise HTTPException(400, "품목을 1개 이상 입력하세요")
+
+    with get_db() as conn:
+        match = conn.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(404, "매칭 건을 찾을 수 없습니다")
+
+        # 행사 품목 조회
+        event_products = []
+        if match["event_id"]:
+            event_products = [
+                dict(r) for r in conn.execute(
+                    "SELECT * FROM event_products WHERE event_id=?", (match["event_id"],)
+                ).fetchall()
+            ]
+
+        # 기존 품목 삭제 후 재저장
+        conn.execute("DELETE FROM match_items WHERE match_id=?", (match_id,))
+
+        product_dicts = [p.model_dump() for p in products]
+
+        if event_products:
+            matched = match_products(product_dicts, event_products)
+        else:
+            # 행사 미등록 시 전체 인정 처리 (수동 확인 필요 표시)
+            matched = [{**p, "match_status": "approved"} for p in product_dicts]
+
+        for mp in matched:
+            conn.execute("""
+                INSERT INTO match_items (match_id, product_name, series, category, amount, match_status)
+                VALUES (?,?,?,?,?,?)
+            """, (match_id, mp.get("product_name", ""), mp["series"],
+                  mp["category"], mp.get("amount", 0), mp["match_status"]))
+
+        result_type, compensation, note = calc_result_by_product(matched)
+
+        conn.execute("""
+            UPDATE matches SET result_type=?, compensation=?
+            WHERE id=?
+        """, (result_type, compensation, match_id))
+
+    label = {"full": "✅ 전체 인정", "partial": "⚠️ 부분 인정", "rejected": "❌ 불인정"}
+    return {
+        "result_type": result_type,
+        "compensation": compensation,
+        "note": note,
+        "products": matched,
+        "message": label.get(result_type, "-"),
+    }
+
+
+@app.patch("/api/matches/{match_id}")
+async def update_match(match_id: int, body: MatchStatusUpdate):
+    if body.status not in ("pending", "approved", "rejected"):
+        raise HTTPException(400, "status must be pending / approved / rejected")
+    with get_db() as conn:
+        conn.execute("UPDATE matches SET status=? WHERE id=?", (body.status, match_id))
+    return {"message": "상태 업데이트 완료"}
 
 
 if __name__ == "__main__":
