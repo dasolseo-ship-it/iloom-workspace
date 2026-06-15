@@ -46,6 +46,9 @@ ONLINE_STORES = frozenset([
     'EB', 'AS', '온라인사업부',
 ])
 
+# ERP 납기완료 상태값 (시스템마다 표기 다를 수 있어 여러 값 허용)
+DELIVERY_DONE_STATUSES = frozenset(['납기완료', '출고완료', '배송완료', '완료', '출고'])
+
 # 담당 오프라인 매장 (CLAUDE.md 기준)
 MY_STORES = frozenset([
     '송도5', '인천검단', '인천중앙2', '김포5', '부천3', '의정부8', '신세계시흥2',
@@ -202,59 +205,118 @@ def classify_cancel_types(conn):
 
 
 def run_matching_engine(conn) -> int:
-    """오프라인 순수취소건 ↔ 온라인 수주건 자동 매칭"""
+    """
+    온라인 수주 기준 역방향 매칭 + 납기완료 기준 보전금 확정
+    result_type 3단계:
+      cancel_match_delivered  : 오프라인 취소 + 온라인 납기완료 → 보전 확정 (5% 계산)
+      cancel_match_pending    : 오프라인 취소 + 온라인 수주중   → 보전 대기 (납기완료 후 업데이트)
+      active_match            : 오프라인 수주중 + 온라인 수주   → 참고용 클러스터
+    """
     events = conn.execute("SELECT * FROM events ORDER BY announcement_date").fetchall()
-
-    offline_cancels = conn.execute("""
-        SELECT * FROM erp_orders
-        WHERE store_type='offline'
-        AND cancel_type='pure_cancel'
-        AND customer_name != ''
-        AND address_dong IS NOT NULL
-    """).fetchall()
-
     matched = 0
-    for oc in offline_cancels:
-        for ev in events:
-            if (oc["order_date"] or "") >= ev["announcement_date"]:
-                continue
 
-            online_orders = conn.execute("""
+    for ev in events:
+        # 행사 기간 내 온라인 수주건 모두 추출 (납기완료 포함)
+        online_orders = conn.execute("""
+            SELECT * FROM erp_orders
+            WHERE store_type = 'online'
+            AND order_date >= ?
+            AND order_date <= ?
+            AND customer_name != ''
+            AND address_dong IS NOT NULL
+        """, (ev["start_date"], ev["end_date"])).fetchall()
+
+        # 취소·보류 건은 매칭 대상 제외
+        online_orders = [
+            o for o in online_orders
+            if o["order_status"] not in ("취소",)
+        ]
+
+        for oo in online_orders:
+            offline_orders = conn.execute("""
                 SELECT * FROM erp_orders
-                WHERE store_type='online'
-                AND order_status='수주'
-                AND customer_name=?
-                AND address_dong=?
-                AND order_date >= ?
-                AND order_date <= ?
-            """, (oc["customer_name"], oc["address_dong"],
-                  ev["start_date"], ev["end_date"])).fetchall()
+                WHERE store_type = 'offline'
+                AND customer_name = ?
+                AND address_dong = ?
+                AND order_date < ?
+            """, (oo["customer_name"], oo["address_dong"], ev["announcement_date"])).fetchall()
 
-            for oo in online_orders:
+            for of in offline_orders:
                 exists = conn.execute(
                     "SELECT 1 FROM matches WHERE offline_order_no=? AND online_order_no=?",
-                    (oc["order_no"], oo["order_no"])
+                    (of["order_no"], oo["order_no"])
                 ).fetchone()
                 if exists:
                     continue
 
                 keys = ["customer_name", "address_dong"]
-                if oc["phone_last4"] and oo["phone_last4"] and oc["phone_last4"] == oo["phone_last4"]:
+                if (of["phone_last4"] and oo["phone_last4"]
+                        and of["phone_last4"] == oo["phone_last4"]):
                     keys.append("phone_last4")
+
+                is_cancel = (
+                    of["order_status"] == "취소"
+                    and of.get("cancel_type") == "pure_cancel"
+                )
+                is_delivered = oo["order_status"] in DELIVERY_DONE_STATUSES
+
+                if is_cancel and is_delivered:
+                    result_type = "cancel_match_delivered"
+                    compensation = round((of["amount"] or 0) * 0.05, 0)
+                elif is_cancel:
+                    result_type = "cancel_match_pending"
+                    compensation = 0
+                else:
+                    result_type = "active_match"
+                    compensation = 0
 
                 conn.execute("""
                     INSERT INTO matches
-                    (offline_order_no, online_order_no, event_id, match_keys, match_confidence, compensation)
-                    VALUES (?,?,?,?,?,?)
+                    (offline_order_no, online_order_no, event_id, match_keys,
+                     match_confidence, result_type, compensation)
+                    VALUES (?,?,?,?,?,?,?)
                 """, (
-                    oc["order_no"], oo["order_no"], ev["id"],
+                    of["order_no"], oo["order_no"], ev["id"],
                     json.dumps(keys, ensure_ascii=False),
                     "high" if len(keys) >= 3 else "medium",
-                    round((oc["amount"] or 0) * 0.05, 0),
+                    result_type,
+                    compensation,
                 ))
                 matched += 1
 
     return matched
+
+
+def refresh_delivery_status(conn) -> int:
+    """
+    기존 cancel_match_pending 건 중 온라인 수주가 납기완료된 건을
+    cancel_match_delivered 로 업데이트하고 보전금 재계산
+    매월 ERP 데이터 재업로드 후 호출
+    """
+    updated = 0
+    pending_matches = conn.execute("""
+        SELECT m.id, m.offline_order_no, m.online_order_no, of.amount
+        FROM matches m
+        JOIN erp_orders of ON m.offline_order_no = of.order_no
+        WHERE m.result_type = 'cancel_match_pending'
+          AND m.status = 'pending'
+    """).fetchall()
+
+    for pm in pending_matches:
+        online = conn.execute(
+            "SELECT order_status FROM erp_orders WHERE order_no=?",
+            (pm["online_order_no"],)
+        ).fetchone()
+        if online and online["order_status"] in DELIVERY_DONE_STATUSES:
+            compensation = round((pm["amount"] or 0) * 0.05, 0)
+            conn.execute("""
+                UPDATE matches
+                SET result_type='cancel_match_delivered', compensation=?
+                WHERE id=?
+            """, (compensation, pm["id"]))
+            updated += 1
+
+    return updated
 
 
 # ================================================================
@@ -368,6 +430,18 @@ async def get_config():
 @app.post("/api/events")
 async def create_event(event: EventIn):
     with get_db() as conn:
+        # 커넥트플러스 기준: 동일 기간 행사 중복 방지
+        overlapping = conn.execute("""
+            SELECT id, event_name, start_date, end_date FROM events
+            WHERE NOT (end_date < ? OR start_date > ?)
+        """, (event.start_date, event.end_date)).fetchone()
+        if overlapping:
+            raise HTTPException(
+                400,
+                f"기간 중복: '{overlapping['event_name']}'({overlapping['start_date']}~{overlapping['end_date']})와 행사 기간이 겹칩니다. "
+                f"커넥트플러스는 동시에 하나의 행사만 등록 가능합니다."
+            )
+
         cur = conn.execute(
             "INSERT INTO events (event_name, announcement_date, start_date, end_date) VALUES (?,?,?,?)",
             (event.event_name, event.announcement_date, event.start_date, event.end_date),
@@ -390,8 +464,40 @@ async def list_events():
             products = conn.execute(
                 "SELECT * FROM event_products WHERE event_id=?", (e["id"],)
             ).fetchall()
-            result.append({**dict(e), "products": [dict(p) for p in products]})
+            # 오프라인 취소 추출 기간 자동 계산 (공지일 D-1까지)
+            ann = date.fromisoformat(e["announcement_date"])
+            d_minus_1 = (ann - timedelta(days=1)).isoformat()
+            ev_dict = dict(e)
+            ev_dict["offline_extract_until"] = d_minus_1  # ERP 추출 시 이 날짜까지 오프라인 취소 포함
+            ev_dict["products"] = [dict(p) for p in products]
+            result.append(ev_dict)
     return result
+
+
+@app.get("/api/events/{event_id}/extract-guide")
+async def get_extract_guide(event_id: int):
+    """ERP 데이터 추출 가이드: 이 행사의 오프라인 취소 추출 기간 반환"""
+    with get_db() as conn:
+        ev = conn.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
+        if not ev:
+            raise HTTPException(404, "행사를 찾을 수 없습니다")
+        ann = date.fromisoformat(ev["announcement_date"])
+        d_minus_1 = ann - timedelta(days=1)
+        # 오프라인 취소 추출: 6개월 전 ~ D-1
+        extract_from = (d_minus_1 - timedelta(days=180)).isoformat()
+        return {
+            "event_id": event_id,
+            "event_name": ev["event_name"],
+            "announcement_date": ev["announcement_date"],
+            "online_period": f"{ev['start_date']} ~ {ev['end_date']}",
+            "offline_extract_guide": {
+                "description": "ERP에서 이 기간의 '오프라인 수주' 데이터를 추출하세요",
+                "from": extract_from,
+                "until": d_minus_1.isoformat(),
+                "status_filter": "취소",
+                "note": f"행사 공지일({ev['announcement_date']}) D-1({d_minus_1.isoformat()})까지 취소된 오프라인 수주만 보전 대상"
+            }
+        }
 
 
 @app.delete("/api/events/{event_id}")
@@ -833,12 +939,50 @@ async def upload_erp(file: UploadFile = File(...)):
 
         classify_cancel_types(conn)
         matched = run_matching_engine(conn)
+        delivery_updated = refresh_delivery_status(conn)
+
+        # 취소 분류 상세 통계
+        cancel_stats = conn.execute("""
+            SELECT
+                cancel_type,
+                COUNT(*) as cnt,
+                SUM(amount) as total_amount
+            FROM erp_orders
+            WHERE order_status='취소'
+            GROUP BY cancel_type
+        """).fetchall()
+
+        # 행사별 매칭 현황
+        event_match_stats = conn.execute("""
+            SELECT e.event_name, COUNT(m.id) as match_cnt,
+                   SUM(m.compensation) as total_comp
+            FROM events e
+            LEFT JOIN matches m ON e.id = m.event_id
+            GROUP BY e.id, e.event_name
+        """).fetchall()
+
+        pure_cancel_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline' AND cancel_type='pure_cancel'"
+        ).fetchone()["c"]
+
+    cancel_breakdown = {r["cancel_type"] or "미분류": {"건수": r["cnt"], "금액": r["total_amount"]} for r in cancel_stats}
+    event_breakdown = [{"행사명": r["event_name"], "매칭건수": r["match_cnt"], "보전금합계": r["total_comp"] or 0} for r in event_match_stats]
 
     return {
-        "message": f"{inserted}건 처리, 취소분류 완료, 신규 매칭 {matched}건 발견",
+        "message": f"{inserted}건 처리 완료",
         "inserted": inserted,
         "skipped": skipped,
-        "matched": matched,
+        "cancel_summary": {
+            "pure_cancel": cancel_breakdown.get("pure_cancel", {"건수": 0, "금액": 0}),
+            "date_change": cancel_breakdown.get("date_change", {"건수": 0, "금액": 0}),
+            "미분류": cancel_breakdown.get("미분류", {"건수": 0, "금액": 0}),
+            "보전대상_오프라인_취소": pure_cancel_cnt,
+        },
+        "matching": {
+            "신규_매칭건수": matched,
+            "납기완료_업데이트": delivery_updated,
+            "행사별_현황": event_breakdown,
+        },
     }
 
 
@@ -865,17 +1009,30 @@ async def erp_stats():
             "SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline' AND cancel_type='pure_cancel'"
         ).fetchone()["c"]
         match_cnt = conn.execute("SELECT COUNT(*) as c FROM matches").fetchone()["c"]
+        delivered_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM matches WHERE result_type='cancel_match_delivered'"
+        ).fetchone()["c"]
+        pending_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM matches WHERE result_type='cancel_match_pending'"
+        ).fetchone()["c"]
         approved_cnt = conn.execute(
             "SELECT COUNT(*) as c FROM matches WHERE status='approved'"
         ).fetchone()["c"]
         total_comp = conn.execute(
             "SELECT COALESCE(SUM(compensation),0) as s FROM matches WHERE status='approved'"
         ).fetchone()["s"]
+        # 납기완료 기준 보전 예정액 (미승인 포함)
+        expected_comp = conn.execute(
+            "SELECT COALESCE(SUM(compensation),0) as s FROM matches WHERE result_type='cancel_match_delivered'"
+        ).fetchone()["s"]
     return {
         "total_cancels": cancel_cnt,
         "total_matches": match_cnt,
+        "delivered_matches": delivered_cnt,
+        "pending_delivery_matches": pending_cnt,
         "approved_matches": approved_cnt,
         "total_compensation": total_comp,
+        "expected_compensation": expected_comp,
     }
 
 
@@ -883,7 +1040,20 @@ async def erp_stats():
 async def trigger_match():
     with get_db() as conn:
         matched = run_matching_engine(conn)
-    return {"message": f"매칭 실행 완료: 신규 {matched}건 발견"}
+        updated = refresh_delivery_status(conn)
+    return {
+        "message": f"매칭 실행 완료",
+        "신규_매칭": matched,
+        "납기완료_업데이트": updated,
+    }
+
+
+@app.post("/api/erp/refresh-delivery")
+async def refresh_delivery():
+    """납기완료 상태 업데이트만 단독 실행 (매월 ERP 재업로드 후 호출)"""
+    with get_db() as conn:
+        updated = refresh_delivery_status(conn)
+    return {"message": f"납기완료 업데이트: {updated}건 → cancel_match_delivered 전환"}
 
 
 # ================================================================
@@ -922,6 +1092,69 @@ async def list_matches():
             d["items"] = [dict(i) for i in items]
             result.append(d)
     return result
+
+
+@app.get("/api/clusters")
+async def list_clusters(event_id: int = 0):
+    """
+    사람(고객) 기준 클러스터 뷰 (선우님 Step 4)
+    동일 고객이 온라인+오프라인 모두에서 수주한 건들을 묶어서 반환
+    """
+    with get_db() as conn:
+        where = "WHERE m.event_id = ?" if event_id else ""
+        params = [event_id] if event_id else []
+
+        rows = conn.execute(f"""
+            SELECT
+                of.customer_name,
+                of.address_dong,
+                e.id                                                                    AS event_id,
+                e.event_name,
+                COUNT(DISTINCT of.order_no)                                                     AS offline_order_cnt,
+                SUM(CASE WHEN m.result_type='cancel_match_delivered' THEN 1 ELSE 0 END)        AS cancel_cnt,
+                SUM(CASE WHEN m.result_type='cancel_match_pending'   THEN 1 ELSE 0 END)        AS pending_cnt,
+                SUM(CASE WHEN m.result_type='active_match'           THEN 1 ELSE 0 END)        AS active_cnt,
+                SUM(CASE WHEN m.result_type='cancel_match_delivered' THEN m.compensation ELSE 0 END) AS total_compensation,
+                GROUP_CONCAT(DISTINCT of.store_name)                                   AS offline_stores,
+                GROUP_CONCAT(DISTINCT on_.store_name)                                  AS online_stores,
+                MIN(m.match_confidence)                                                AS min_confidence
+            FROM matches m
+            JOIN erp_orders of  ON m.offline_order_no = of.order_no
+            JOIN erp_orders on_ ON m.online_order_no  = on_.order_no
+            JOIN events e       ON m.event_id = e.id
+            {where}
+            GROUP BY of.customer_name, of.address_dong, e.id
+            ORDER BY total_compensation DESC, of.customer_name
+        """, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/clusters/detail")
+async def cluster_detail(event_id: int, customer: str, address: str):
+    """특정 고객+행사의 온라인+오프라인 수주 상세 목록"""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                m.id, m.result_type, m.compensation, m.match_confidence, m.status,
+                of.order_no   AS offline_order_no,
+                of.store_name AS offline_store,
+                of.order_date AS offline_date,
+                of.amount     AS offline_amount,
+                of.order_status AS offline_status,
+                of.cancel_type,
+                on_.order_no   AS online_order_no,
+                on_.store_name AS online_store,
+                on_.order_date AS online_date,
+                on_.amount     AS online_amount
+            FROM matches m
+            JOIN erp_orders of  ON m.offline_order_no = of.order_no
+            JOIN erp_orders on_ ON m.online_order_no  = on_.order_no
+            WHERE m.event_id = ?
+            AND of.customer_name = ?
+            AND of.address_dong = ?
+            ORDER BY m.result_type DESC, m.id
+        """, (event_id, customer, address)).fetchall()
+    return [dict(r) for r in rows]
 
 
 @app.post("/api/matches/{match_id}/products")

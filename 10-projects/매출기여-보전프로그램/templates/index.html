@@ -23,10 +23,13 @@
   .badge-full    { @apply bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded; }
   .badge-partial { @apply bg-yellow-100 text-yellow-700 text-xs font-semibold px-2 py-0.5 rounded; }
   .badge-rejected{ @apply bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded; }
-  .badge-pending   { @apply bg-gray-100 text-gray-500 text-xs font-semibold px-2 py-0.5 rounded; }
-  .badge-approved  { @apply bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded; }
-  .badge-high      { @apply bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded; }
-  .badge-medium    { @apply bg-yellow-100 text-yellow-700 text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-pending          { @apply bg-gray-100 text-gray-500 text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-approved         { @apply bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-high             { @apply bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-medium           { @apply bg-yellow-100 text-yellow-700 text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-delivered        { @apply bg-brand text-white text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-delivery-pending { @apply bg-orange-100 text-orange-600 text-xs font-semibold px-2 py-0.5 rounded; }
+  .badge-active           { @apply bg-gray-100 text-gray-400 text-xs font-semibold px-2 py-0.5 rounded; }
   input[type=text], input[type=date], input[type=number], select {
     @apply border border-gray-300 rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:border-brand;
   }
@@ -122,6 +125,9 @@
               <div class="text-xs text-gray-500 mt-0.5">
                 공지: <span x-text="event.announcement_date"></span> &nbsp;|&nbsp;
                 기간: <span x-text="event.start_date"></span> ~ <span x-text="event.end_date"></span>
+              </div>
+              <div class="text-xs mt-1 bg-blue-50 text-blue-700 inline-block px-2 py-0.5 rounded">
+                📋 ERP 추출 기간: <span x-text="'~' + (event.offline_extract_until || '-')"></span>까지 오프라인 취소 수주
               </div>
             </div>
             <button @click="deleteEvent(event.id)" class="text-gray-300 hover:text-red-400 transition-colors text-xs">삭제</button>
@@ -459,19 +465,19 @@
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
       <div class="bg-white rounded border border-gray-200 p-4 text-center">
         <div class="text-2xl font-bold text-gray-800" x-text="erpStats.total_cancels"></div>
-        <div class="text-xs text-gray-500 mt-0.5">순수취소건</div>
+        <div class="text-xs text-gray-500 mt-0.5">오프라인 순수취소</div>
+      </div>
+      <div class="bg-white rounded border border-gray-200 p-4 text-center border-l-4 border-l-brand">
+        <div class="text-2xl font-bold text-brand" x-text="erpStats.delivered_matches || 0"></div>
+        <div class="text-xs text-gray-500 mt-0.5">납기완료 (보전 확정)</div>
+      </div>
+      <div class="bg-white rounded border border-gray-200 p-4 text-center border-l-4 border-l-orange-400">
+        <div class="text-2xl font-bold text-orange-500" x-text="erpStats.pending_delivery_matches || 0"></div>
+        <div class="text-xs text-gray-500 mt-0.5">납기 대기중</div>
       </div>
       <div class="bg-white rounded border border-gray-200 p-4 text-center">
-        <div class="text-2xl font-bold text-blue-600" x-text="erpStats.total_matches"></div>
-        <div class="text-xs text-gray-500 mt-0.5">매칭 후보</div>
-      </div>
-      <div class="bg-white rounded border border-gray-200 p-4 text-center">
-        <div class="text-2xl font-bold text-green-600" x-text="erpStats.approved_matches"></div>
-        <div class="text-xs text-gray-500 mt-0.5">승인 완료</div>
-      </div>
-      <div class="bg-white rounded border border-gray-200 p-4 text-center">
-        <div class="text-2xl font-bold text-brand" x-text="'₩' + (erpStats.total_compensation||0).toLocaleString('ko-KR')"></div>
-        <div class="text-xs text-gray-500 mt-0.5">확정 보전금</div>
+        <div class="text-xl font-bold text-brand" x-text="'₩' + (erpStats.expected_compensation||0).toLocaleString('ko-KR')"></div>
+        <div class="text-xs text-gray-500 mt-0.5">보전 예정액 (납기완료 기준)</div>
       </div>
     </div>
 
@@ -488,6 +494,10 @@
           class="hover:text-gray-700">전체</button>
       </div>
       <div class="flex gap-2">
+        <button @click="refreshDelivery()"
+          class="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5">
+          납기완료 업데이트
+        </button>
         <button @click="runMatch()"
           class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5">
           매칭 재실행
@@ -562,8 +572,10 @@
     </div>
 
     <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-xs text-yellow-700">
-      매칭 키: 고객명 + 동주소 (신뢰도 medium) / + 휴대폰 뒷 4자리 (신뢰도 high, 선우님 설정 후 활성화).<br>
-      상품 일치 여부는 직접 확인 후 승인/반려하세요.
+      매칭 키: 고객명 + 동주소 (신뢰도 medium) / + 휴대폰 뒷 4자리 (신뢰도 high).<br>
+      <span class="badge-delivered inline-block mt-1 mr-1">보전 확정</span> 온라인 납기완료 &nbsp;
+      <span class="badge-delivery-pending inline-block">납기 대기</span> 온라인 수주중 (납기완료 후 자동 전환) &nbsp;
+      <span class="badge-active inline-block">참고용</span> 오프라인 수주 유지 중
     </div>
 
     <div class="space-y-3">
@@ -599,10 +611,15 @@
                   <div class="text-gray-600" x-text="m.online_amount > 0 ? '₩' + m.online_amount.toLocaleString('ko-KR') : '-'"></div>
                 </div>
               </div>
-              <!-- 행사 + 보전금 요약 -->
-              <div class="mt-2 flex items-center gap-3 text-xs">
+              <!-- 행사 + 납기 상태 + 보전금 요약 -->
+              <div class="mt-2 flex items-center flex-wrap gap-2 text-xs">
                 <span class="text-gray-400">행사: <span class="text-gray-600" x-text="m.event_name || '미등록'"></span></span>
-                <template x-if="m.result_type">
+                <!-- 납기 상태 뱃지 -->
+                <span x-show="m.result_type === 'cancel_match_delivered'" class="badge-delivered">보전 확정</span>
+                <span x-show="m.result_type === 'cancel_match_pending'" class="badge-delivery-pending">납기 대기</span>
+                <span x-show="m.result_type === 'active_match'" class="badge-active">참고용</span>
+                <!-- 품목 검증 결과 -->
+                <template x-if="m.result_type && !['cancel_match_delivered','cancel_match_pending','active_match'].includes(m.result_type)">
                   <span :class="{
                     'badge-full':    m.result_type === 'full',
                     'badge-partial': m.result_type === 'partial',
@@ -612,7 +629,6 @@
                 <span class="text-brand font-semibold"
                   x-show="m.compensation > 0"
                   x-text="'보전금 ₩' + m.compensation.toLocaleString('ko-KR')"></span>
-                <span class="text-gray-300" x-show="!m.result_type">품목 미입력</span>
               </div>
             </div>
             <!-- 우측: 상태 + 버튼 -->
@@ -749,6 +765,128 @@
       </template>
     </div>
   </div>
+
+  <!-- ===============================
+       TAB 7: 고객 클러스터 뷰 (선우님 Step 4)
+  ================================ -->
+  <div x-show="activeTab === 'clusters'" x-cloak>
+    <div class="flex justify-between items-center mb-4">
+      <div>
+        <h2 class="font-semibold text-gray-700">고객 클러스터</h2>
+        <p class="text-xs text-gray-400 mt-0.5">온라인 행사 수주 고객 중 오프라인 수주 이력이 있는 고객 목록 (사람 기준)</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <select x-model="clusterEventId" @change="loadClusters()"
+          class="border border-gray-300 rounded px-2 py-1.5 text-xs">
+          <option value="0">전체 행사</option>
+          <template x-for="e in events" :key="e.id">
+            <option :value="e.id" x-text="e.event_name"></option>
+          </template>
+        </select>
+        <button @click="loadClusters()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded">새로고침</button>
+      </div>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-700">
+      <strong>클러스터 로직:</strong> 행사 기간 내 온라인 수주 고객 → 공지일 D-1 이전 오프라인 수주 역추적 →
+      <span class="text-red-600 font-semibold">취소건(cancel_match)</span>은 보전 대상 /
+      <span class="text-gray-600">비취소건(active_match)</span>은 참고용 표시
+    </div>
+
+    <template x-if="clusters.length === 0">
+      <div class="text-center py-12 text-gray-400 bg-white rounded border border-gray-200">
+        클러스터 데이터가 없습니다. ERP 파일 업로드 후 매칭을 실행하세요.
+      </div>
+    </template>
+
+    <div class="space-y-3">
+      <template x-for="c in clusters" :key="c.customer_name + c.address_dong + c.event_id">
+        <div class="bg-white rounded border border-gray-200 p-4">
+          <!-- 고객 헤더 -->
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-gray-800 text-sm" x-text="c.customer_name"></span>
+                <span class="text-xs text-gray-400" x-text="c.address_dong"></span>
+                <span :class="c.min_confidence === 'high' ? 'badge-high' : 'badge-medium'"
+                  x-text="c.min_confidence === 'high' ? '신뢰도 HIGH' : '신뢰도 MEDIUM'"></span>
+              </div>
+              <div class="text-xs text-gray-400 mt-0.5" x-text="'행사: ' + c.event_name"></div>
+            </div>
+            <div class="text-right">
+              <template x-if="c.total_compensation > 0">
+                <div class="text-brand font-bold text-sm" x-text="'₩' + c.total_compensation.toLocaleString('ko-KR')"></div>
+              </template>
+              <div class="flex gap-1.5 mt-1 justify-end flex-wrap">
+                <template x-if="c.cancel_cnt > 0">
+                  <span class="badge-delivered" x-text="'보전확정 ' + c.cancel_cnt + '건'"></span>
+                </template>
+                <template x-if="c.pending_cnt > 0">
+                  <span class="badge-delivery-pending" x-text="'납기대기 ' + c.pending_cnt + '건'"></span>
+                </template>
+                <template x-if="c.active_cnt > 0">
+                  <span class="badge-active" x-text="'참고 ' + c.active_cnt + '건'"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- 매장 요약 -->
+          <div class="mt-2 text-xs text-gray-500 flex flex-wrap gap-3">
+            <span>오프라인: <span class="font-medium text-gray-700" x-text="c.offline_stores || '-'"></span></span>
+            <span>온라인: <span class="font-medium text-gray-700" x-text="c.online_stores || '-'"></span></span>
+          </div>
+
+          <!-- 상세 펼치기 -->
+          <div class="mt-3 pt-3 border-t border-gray-100">
+            <button @click="toggleClusterDetail(c)"
+              class="text-xs flex items-center gap-1 font-medium"
+              :class="clusterExpanded(c) ? 'text-brand' : 'text-gray-500 hover:text-brand'">
+              <svg class="w-3.5 h-3.5 transition-transform" :class="clusterExpanded(c) ? 'rotate-90' : ''"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+              수주 상세 보기
+            </button>
+
+            <template x-if="clusterExpanded(c) && clusterDetails[clusterKey(c)]">
+              <div class="mt-3 space-y-2">
+                <template x-for="d in clusterDetails[clusterKey(c)]" :key="d.id">
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs rounded p-2"
+                    :class="d.result_type === 'cancel_match' ? 'bg-red-50' : 'bg-gray-50'">
+                    <!-- 오프라인 -->
+                    <div>
+                      <div class="font-semibold mb-0.5"
+                        :class="d.result_type === 'cancel_match' ? 'text-red-600' : 'text-gray-500'">
+                        <span x-text="d.result_type === 'cancel_match' ? '취소 (오프라인)' : '수주중 (오프라인)'"></span>
+                      </div>
+                      <div class="text-gray-700" x-text="d.offline_store"></div>
+                      <div class="text-gray-500" x-text="d.offline_date"></div>
+                      <div class="font-medium" x-text="d.offline_amount > 0 ? '₩' + d.offline_amount.toLocaleString('ko-KR') : '-'"></div>
+                      <span x-text="d.offline_status" class="text-gray-400"></span>
+                    </div>
+                    <!-- 화살표 -->
+                    <div class="flex items-center justify-center text-gray-300 text-lg">→</div>
+                    <!-- 온라인 -->
+                    <div>
+                      <div class="text-blue-600 font-semibold mb-0.5">온라인 수주</div>
+                      <div class="text-gray-700" x-text="d.online_store"></div>
+                      <div class="text-gray-500" x-text="d.online_date"></div>
+                      <div class="font-medium" x-text="d.online_amount > 0 ? '₩' + d.online_amount.toLocaleString('ko-KR') : '-'"></div>
+                      <template x-if="d.result_type === 'cancel_match' && d.compensation > 0">
+                        <span class="text-brand font-bold"
+                          x-text="'보전금 ₩' + d.compensation.toLocaleString('ko-KR')"></span>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
 </div>
 
 <!-- ===============================
@@ -831,6 +969,7 @@ function app() {
       { id: 'dashboard', label: '매장별 집계' },
       { id: 'erp',       label: 'ERP 수주' },
       { id: 'matches',   label: '매칭 결과' },
+      { id: 'clusters',  label: '고객 클러스터' },
     ],
     config: { series: [], categories: [] },
     events: [],
@@ -846,6 +985,10 @@ function app() {
     matchInputs: {},
     matchVerifyResults: {},
     filterType: '',
+    clusters: [],
+    clusterEventId: 0,
+    clusterDetailMap: {},  // key → detail rows
+    clusterExpandedSet: {},
     showEventModal: false,
     submitting: false,
     lastResult: null,
@@ -865,6 +1008,7 @@ function app() {
         this.loadConfig(), this.loadEvents(), this.loadOrders(),
         this.loadStats(), this.loadStoreStats(),
         this.loadErpOrders(), this.loadErpStats(), this.loadMatches(),
+        this.loadClusters(),
       ]);
     },
 
@@ -1025,7 +1169,15 @@ function app() {
       const r = await fetch('/api/erp/upload', { method: 'POST', body: fd });
       const data = await r.json();
       if (r.ok) {
-        this.showToast(data.message);
+        const cs = data.cancel_summary || {};
+        const mt = data.matching || {};
+        const msg = [
+          data.message,
+          `순수취소: ${cs.pure_cancel?.건수 || 0}건 (보전대상: ${cs.보전대상_오프라인_취소 || 0}건)`,
+          `납기변경(제외): ${cs.date_change?.건수 || 0}건`,
+          `신규매칭: ${mt.신규_매칭건수 || 0}건`,
+        ].join(' | ');
+        this.showToast(msg);
         await Promise.all([this.loadErpOrders(), this.loadErpStats(), this.loadMatches()]);
       } else {
         this.showToast(data.detail || '업로드 실패', 'error');
@@ -1070,8 +1222,16 @@ function app() {
     async runMatch() {
       const r = await fetch('/api/erp/run-match', { method: 'POST' });
       const data = await r.json();
+      const msg = `${data.message || '완료'} | 신규매칭: ${data.신규_매칭 || 0}건 | 납기완료전환: ${data.납기완료_업데이트 || 0}건`;
+      this.showToast(msg);
+      await Promise.all([this.loadMatches(), this.loadErpStats(), this.loadClusters()]);
+    },
+
+    async refreshDelivery() {
+      const r = await fetch('/api/erp/refresh-delivery', { method: 'POST' });
+      const data = await r.json();
       this.showToast(data.message);
-      await Promise.all([this.loadMatches(), this.loadErpStats()]);
+      await Promise.all([this.loadMatches(), this.loadErpStats(), this.loadClusters()]);
     },
 
     async updateMatchStatus(id, status) {
@@ -1089,6 +1249,40 @@ function app() {
     get filteredMatches() {
       if (!this.matchFilter) return this.matchList;
       return this.matchList.filter(m => m.status === this.matchFilter);
+    },
+
+    async loadClusters() {
+      const r = await fetch(`/api/clusters?event_id=${this.clusterEventId}`);
+      this.clusters = await r.json();
+    },
+
+    clusterKey(c) {
+      return `${c.event_id}__${c.customer_name}__${c.address_dong}`;
+    },
+    clusterExpanded(c) {
+      return !!this.clusterExpandedSet[this.clusterKey(c)];
+    },
+    async toggleClusterDetail(c) {
+      const key = this.clusterKey(c);
+      if (this.clusterExpandedSet[key]) {
+        this.clusterExpandedSet = { ...this.clusterExpandedSet, [key]: false };
+        return;
+      }
+      if (!this.clusterDetailMap[key]) {
+        const params = new URLSearchParams({
+          event_id: c.event_id,
+          customer: c.customer_name,
+          address: c.address_dong,
+        });
+        const r = await fetch(`/api/clusters/detail?${params}`);
+        const data = await r.json();
+        this.clusterDetailMap = { ...this.clusterDetailMap, [key]: data };
+      }
+      this.clusterExpandedSet = { ...this.clusterExpandedSet, [key]: true };
+    },
+
+    get clusterDetails() {
+      return this.clusterDetailMap;
     },
 
     showToast(message, type = 'success') {
