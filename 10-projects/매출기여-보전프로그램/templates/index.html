@@ -127,7 +127,7 @@
                 기간: <span x-text="event.start_date"></span> ~ <span x-text="event.end_date"></span>
               </div>
               <div class="text-xs mt-1 bg-blue-50 text-blue-700 inline-block px-2 py-0.5 rounded">
-                📋 ERP 추출 기간: <span x-text="'~' + (event.offline_extract_until || '-')"></span>까지 오프라인 취소 수주
+                📋 ERP 추출 기간: <span x-text="(event.offline_extract_from || '-')"></span>부터 오프라인 취소 수주
               </div>
             </div>
             <button @click="deleteEvent(event.id)" class="text-gray-300 hover:text-red-400 transition-colors text-xs">삭제</button>

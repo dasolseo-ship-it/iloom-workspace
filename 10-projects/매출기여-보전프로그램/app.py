@@ -128,6 +128,7 @@ def init_db():
                 store_type TEXT NOT NULL,
                 order_status TEXT NOT NULL,
                 customer_name TEXT DEFAULT '',
+                order_name TEXT DEFAULT '',
                 order_date TEXT,
                 delivery_date TEXT,
                 amount REAL DEFAULT 0,
@@ -204,7 +205,7 @@ def classify_cancel_types(conn):
         conn.execute("UPDATE erp_orders SET cancel_type=? WHERE order_no=?", (ct, r["order_no"]))
 
 
-def run_matching_engine(conn) -> int:
+def run_matching_engine(conn) -> dict:
     """
     온라인 수주 기준 역방향 매칭 + 납기완료 기준 보전금 확정
     result_type 3단계:
@@ -284,7 +285,7 @@ def run_matching_engine(conn) -> int:
                 ))
                 matched += 1
 
-    return matched
+    return {"matched": matched}
 
 
 def refresh_delivery_status(conn) -> int:
@@ -464,11 +465,11 @@ async def list_events():
             products = conn.execute(
                 "SELECT * FROM event_products WHERE event_id=?", (e["id"],)
             ).fetchall()
-            # 오프라인 취소 추출 기간 자동 계산 (공지일 D-1까지)
+            # 오프라인 취소 추출 기간 자동 계산 (공지 다음날부터 취소된 수주가 대상)
             ann = date.fromisoformat(e["announcement_date"])
-            d_minus_1 = (ann - timedelta(days=1)).isoformat()
+            day_after = (ann + timedelta(days=1)).isoformat()
             ev_dict = dict(e)
-            ev_dict["offline_extract_until"] = d_minus_1  # ERP 추출 시 이 날짜까지 오프라인 취소 포함
+            ev_dict["offline_extract_from"] = day_after  # ERP 추출 시 이 날짜부터 취소된 오프라인 수주 포함
             ev_dict["products"] = [dict(p) for p in products]
             result.append(ev_dict)
     return result
@@ -929,16 +930,17 @@ async def upload_erp(file: UploadFile = File(...)):
                 conn.execute("""
                     INSERT OR REPLACE INTO erp_orders
                     (order_no, order_base, order_seq, store_name, store_type, order_status,
-                     customer_name, order_date, delivery_date, amount, address_dong)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                     customer_name, order_name, order_date, delivery_date, amount, address_dong)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (order_no, base, seq, store, store_type, status,
-                      customer_name, order_date, delivery_date, amount, address))
+                      customer_name, order_name, order_date, delivery_date, amount, address))
                 inserted += 1
             except Exception:
                 skipped += 1
 
         classify_cancel_types(conn)
-        matched = run_matching_engine(conn)
+        match_result = run_matching_engine(conn)
+        matched = match_result["matched"]
         delivery_updated = refresh_delivery_status(conn)
 
         # 취소 분류 상세 통계
