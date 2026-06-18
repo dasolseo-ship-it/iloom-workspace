@@ -227,11 +227,17 @@ def run_matching_engine(conn) -> dict:
     for ev in events:
         channel = ev["online_channel"] if ev["online_channel"] else "네이버"
         ann_date = date.fromisoformat(ev["announcement_date"])
-        lookback = ev["offline_lookback_days"] if ev["offline_lookback_days"] else 1
+        end_date = date.fromisoformat(ev["end_date"])
 
-        # 오프라인 수주 범위: (공지일 - 소급일수) ~ 공지일 전날(D-1)
-        offline_order_from = (ann_date - timedelta(days=lookback)).isoformat()
-        offline_order_to = ev["announcement_date"]  # 공지일 미만 (exclusive)
+        # 수주 기간: 공지 전날(D-1) ~ 행사 마지막날
+        offline_order_from = (ann_date - timedelta(days=1)).isoformat()
+        offline_order_to = ev["end_date"]
+
+        # 납기 조건: 행사 종료 기준 D+3개월 이내
+        cutoff_month = end_date.month + 3
+        cutoff_year = end_date.year + (cutoff_month - 1) // 12
+        cutoff_month = ((cutoff_month - 1) % 12) + 1
+        delivery_cutoff = end_date.replace(year=cutoff_year, month=cutoff_month).isoformat()
 
         # 행사 기간 내 온라인 수주건 (지정 플랫폼만 인정)
         online_orders = conn.execute("""
@@ -251,16 +257,17 @@ def run_matching_engine(conn) -> dict:
         ]
 
         for oo in online_orders:
-            # 공지일 이전 수주건만: offline_order_from ~ 공지일 전날(D-1)
+            # 수주 기간(D-1 ~ 행사 마지막날) + 납기 D+3개월 이내 조건 적용
             offline_orders = conn.execute("""
                 SELECT * FROM erp_orders
                 WHERE store_type = 'offline'
                 AND customer_name = ?
                 AND address_dong = ?
                 AND order_date >= ?
-                AND order_date < ?
+                AND order_date <= ?
+                AND (delivery_date IS NULL OR delivery_date <= ?)
             """, (oo["customer_name"], oo["address_dong"],
-                  offline_order_from, offline_order_to)).fetchall()
+                  offline_order_from, offline_order_to, delivery_cutoff)).fetchall()
 
             for of in offline_orders:
                 exists = conn.execute(
