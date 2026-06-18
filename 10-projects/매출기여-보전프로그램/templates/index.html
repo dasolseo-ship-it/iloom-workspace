@@ -772,8 +772,11 @@
   <div x-show="activeTab === 'clusters'" x-cloak>
     <div class="flex justify-between items-center mb-4">
       <div>
-        <h2 class="font-semibold text-gray-700">고객 클러스터</h2>
-        <p class="text-xs text-gray-400 mt-0.5">온라인 행사 수주 고객 중 오프라인 수주 이력이 있는 고객 목록 (사람 기준)</p>
+        <h2 class="font-semibold text-gray-700">매칭 결과 <span class="text-gray-400 font-normal text-sm" x-text="'(' + clusters.length + '명)'"></span></h2>
+        <div class="flex gap-3 mt-1 text-xs">
+          <span class="text-red-600 font-medium" x-text="'보전후보 ' + clusters.filter(c => c.pending_cnt > 0 || c.cancel_cnt > 0).length + '명'"></span>
+          <span class="text-gray-400" x-text="'모니터링 ' + clusters.filter(c => c.pending_cnt === 0 && c.cancel_cnt === 0).length + '명'"></span>
+        </div>
       </div>
       <div class="flex gap-2 items-center">
         <select x-model="clusterEventId" @change="loadClusters()"
@@ -788,9 +791,9 @@
     </div>
 
     <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-700">
-      <strong>클러스터 로직:</strong> 행사 기간 내 온라인 수주 고객 → 공지일 D-1 이전 오프라인 수주 역추적 →
-      <span class="text-red-600 font-semibold">취소건(cancel_match)</span>은 보전 대상 /
-      <span class="text-gray-600">비취소건(active_match)</span>은 참고용 표시
+      동일인(이름+주소) 기준 1건으로 통합 표시 —
+      <span class="text-red-600 font-semibold">보전후보</span>: 오프라인 취소 확인됨 (온라인 납기완료 시 보전금 확정) /
+      <span class="text-gray-600">모니터링</span>: 오프라인 수주 아직 살아있음 (추후 취소 시 자동 전환)
     </div>
 
     <template x-if="clusters.length === 0">
@@ -801,15 +804,15 @@
 
     <div class="space-y-3">
       <template x-for="c in clusters" :key="c.customer_name + c.address_dong + c.event_id">
-        <div class="bg-white rounded border border-gray-200 p-4">
+        <div class="rounded border p-4"
+          :class="(c.pending_cnt > 0 || c.cancel_cnt > 0) ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'">
           <!-- 고객 헤더 -->
           <div class="flex items-start justify-between">
             <div>
               <div class="flex items-center gap-2">
                 <span class="font-semibold text-gray-800 text-sm" x-text="c.customer_name"></span>
                 <span class="text-xs text-gray-400" x-text="c.address_dong"></span>
-                <span :class="c.min_confidence === 'high' ? 'badge-high' : 'badge-medium'"
-                  x-text="c.min_confidence === 'high' ? '신뢰도 HIGH' : '신뢰도 MEDIUM'"></span>
+                <span class="badge-medium">이름+동주소</span>
               </div>
               <div class="text-xs text-gray-400 mt-0.5" x-text="'행사: ' + c.event_name"></div>
             </div>
@@ -853,17 +856,17 @@
               <div class="mt-3 space-y-2">
                 <template x-for="d in clusterDetails[clusterKey(c)]" :key="d.id">
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs rounded p-2"
-                    :class="d.result_type === 'cancel_match' ? 'bg-red-50' : 'bg-gray-50'">
+                    :class="d.result_type !== 'active_match' ? 'bg-red-50' : 'bg-gray-50'">
                     <!-- 오프라인 -->
                     <div>
                       <div class="font-semibold mb-0.5"
-                        :class="d.result_type === 'cancel_match' ? 'text-red-600' : 'text-gray-500'">
-                        <span x-text="d.result_type === 'cancel_match' ? '취소 (오프라인)' : '수주중 (오프라인)'"></span>
+                        :class="d.result_type !== 'active_match' ? 'text-red-600' : 'text-gray-500'">
+                        <span x-text="d.result_type === 'cancel_match_delivered' ? '취소 · 보전확정 (오프라인)' : d.result_type === 'cancel_match_pending' ? '취소 · 납기대기 (오프라인)' : '수주중 (오프라인)'"></span>
                       </div>
                       <div class="text-gray-700" x-text="d.offline_store"></div>
                       <div class="text-gray-500" x-text="d.offline_date"></div>
                       <div class="font-medium" x-text="d.offline_amount > 0 ? '₩' + d.offline_amount.toLocaleString('ko-KR') : '-'"></div>
-                      <span x-text="d.offline_status" class="text-gray-400"></span>
+                      <span x-text="d.cancel_type || d.offline_status" class="text-gray-400"></span>
                     </div>
                     <!-- 화살표 -->
                     <div class="flex items-center justify-center text-gray-300 text-lg">→</div>
@@ -873,7 +876,7 @@
                       <div class="text-gray-700" x-text="d.online_store"></div>
                       <div class="text-gray-500" x-text="d.online_date"></div>
                       <div class="font-medium" x-text="d.online_amount > 0 ? '₩' + d.online_amount.toLocaleString('ko-KR') : '-'"></div>
-                      <template x-if="d.result_type === 'cancel_match' && d.compensation > 0">
+                      <template x-if="d.result_type !== 'active_match' && d.compensation > 0">
                         <span class="text-brand font-bold"
                           x-text="'보전금 ₩' + d.compensation.toLocaleString('ko-KR')"></span>
                       </template>
@@ -968,8 +971,8 @@ function app() {
       { id: 'results',   label: '결과 조회' },
       { id: 'dashboard', label: '매장별 집계' },
       { id: 'erp',       label: 'ERP 수주' },
-      { id: 'matches',   label: '매칭 결과' },
-      { id: 'clusters',  label: '고객 클러스터' },
+      { id: 'clusters',  label: '매칭 결과 (인별)' },
+      { id: 'matches',   label: '매칭 상세 (주문별)' },
     ],
     config: { series: [], categories: [] },
     events: [],

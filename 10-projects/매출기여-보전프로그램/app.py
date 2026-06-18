@@ -250,14 +250,9 @@ def run_matching_engine(conn) -> dict:
                 if exists:
                     continue
 
-                keys = ["customer_name", "address_dong"]
-                if (of["phone_last4"] and oo["phone_last4"]
-                        and of["phone_last4"] == oo["phone_last4"]):
-                    keys.append("phone_last4")
-
                 is_cancel = (
                     of["order_status"] == "취소"
-                    and of.get("cancel_type") == "pure_cancel"
+                    and of["cancel_type"] == "pure_cancel"
                 )
                 is_delivered = oo["order_status"] in DELIVERY_DONE_STATUSES
 
@@ -278,8 +273,8 @@ def run_matching_engine(conn) -> dict:
                     VALUES (?,?,?,?,?,?,?)
                 """, (
                     of["order_no"], oo["order_no"], ev["id"],
-                    json.dumps(keys, ensure_ascii=False),
-                    "high" if len(keys) >= 3 else "medium",
+                    '["customer_name","address_dong"]',
+                    "medium",
                     result_type,
                     compensation,
                 ))
