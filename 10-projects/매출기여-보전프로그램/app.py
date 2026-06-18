@@ -88,6 +88,7 @@ def init_db():
                 announcement_date TEXT NOT NULL,
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
+                online_channel TEXT DEFAULT '네이버',
                 created_at TEXT DEFAULT (datetime('now', 'localtime'))
             );
 
@@ -161,6 +162,10 @@ def init_db():
                 match_status TEXT DEFAULT 'pending'
             );
         """)
+        # 기존 DB 마이그레이션: online_channel 컬럼 없으면 추가
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()]
+        if "online_channel" not in cols:
+            conn.execute("ALTER TABLE events ADD COLUMN online_channel TEXT DEFAULT '네이버'")
 
 
 init_db()
@@ -217,15 +222,17 @@ def run_matching_engine(conn) -> dict:
     matched = 0
 
     for ev in events:
-        # 행사 기간 내 온라인 수주건 모두 추출 (납기완료 포함)
+        # 행사 기간 내 온라인 수주건 추출 (지정된 채널만)
+        channel = ev["online_channel"] if ev["online_channel"] else "네이버"
         online_orders = conn.execute("""
             SELECT * FROM erp_orders
             WHERE store_type = 'online'
+            AND store_name = ?
             AND order_date >= ?
             AND order_date <= ?
             AND customer_name != ''
             AND address_dong IS NOT NULL
-        """, (ev["start_date"], ev["end_date"])).fetchall()
+        """, (channel, ev["start_date"], ev["end_date"])).fetchall()
 
         # 취소·보류 건은 매칭 대상 제외
         online_orders = [
@@ -368,6 +375,7 @@ class EventIn(BaseModel):
     announcement_date: str
     start_date: str
     end_date: str
+    online_channel: str = "네이버"
     products: List[ProductIn]
 
 
@@ -439,8 +447,8 @@ async def create_event(event: EventIn):
             )
 
         cur = conn.execute(
-            "INSERT INTO events (event_name, announcement_date, start_date, end_date) VALUES (?,?,?,?)",
-            (event.event_name, event.announcement_date, event.start_date, event.end_date),
+            "INSERT INTO events (event_name, announcement_date, start_date, end_date, online_channel) VALUES (?,?,?,?,?)",
+            (event.event_name, event.announcement_date, event.start_date, event.end_date, event.online_channel),
         )
         event_id = cur.lastrowid
         for p in event.products:
