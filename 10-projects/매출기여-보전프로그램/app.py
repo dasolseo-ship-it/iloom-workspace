@@ -89,7 +89,7 @@ def init_db():
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 online_channel TEXT DEFAULT '네이버',
-                offline_lookback_days INTEGER DEFAULT 7,
+                offline_lookback_days INTEGER DEFAULT 1,
                 created_at TEXT DEFAULT (datetime('now', 'localtime'))
             );
 
@@ -227,7 +227,7 @@ def run_matching_engine(conn) -> dict:
     for ev in events:
         channel = ev["online_channel"] if ev["online_channel"] else "네이버"
         ann_date = date.fromisoformat(ev["announcement_date"])
-        lookback = ev["offline_lookback_days"] if ev["offline_lookback_days"] else 7
+        lookback = ev["offline_lookback_days"] if ev["offline_lookback_days"] else 1
 
         # 오프라인 수주 범위: (공지일 - 소급일수) ~ 공지일 전날(D-1)
         offline_order_from = (ann_date - timedelta(days=lookback)).isoformat()
