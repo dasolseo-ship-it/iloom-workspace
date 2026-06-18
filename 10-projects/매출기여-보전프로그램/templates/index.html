@@ -853,34 +853,161 @@
             </button>
 
             <template x-if="clusterExpanded(c) && clusterDetails[clusterKey(c)]">
-              <div class="mt-3 space-y-2">
+              <div class="mt-3 space-y-3">
                 <template x-for="d in clusterDetails[clusterKey(c)]" :key="d.id">
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs rounded p-2"
-                    :class="d.result_type !== 'active_match' ? 'bg-red-50' : 'bg-gray-50'">
-                    <!-- 오프라인 -->
-                    <div>
-                      <div class="font-semibold mb-0.5"
-                        :class="d.result_type !== 'active_match' ? 'text-red-600' : 'text-gray-500'">
-                        <span x-text="d.result_type === 'cancel_match_delivered' ? '취소 · 보전확정 (오프라인)' : d.result_type === 'cancel_match_pending' ? '취소 · 납기대기 (오프라인)' : '수주중 (오프라인)'"></span>
+                  <div class="rounded border p-3"
+                    :class="d.result_type !== 'active_match' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-200'">
+                    <!-- 수주 쌍 요약 -->
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs flex-1">
+                        <!-- 오프라인 -->
+                        <div>
+                          <div class="font-semibold mb-0.5"
+                            :class="d.result_type !== 'active_match' ? 'text-red-600' : 'text-gray-500'">
+                            <span x-text="d.result_type === 'cancel_match_delivered' ? '취소 · 보전확정' : d.result_type === 'cancel_match_pending' ? '취소 · 납기대기' : '수주중 (오프라인)'"></span>
+                          </div>
+                          <div class="text-gray-700" x-text="d.offline_store"></div>
+                          <div class="text-gray-500" x-text="d.offline_date"></div>
+                          <div class="font-medium" x-text="d.offline_amount > 0 ? '₩' + d.offline_amount.toLocaleString('ko-KR') : '-'"></div>
+                          <span x-text="d.cancel_type || d.offline_status" class="text-gray-400"></span>
+                        </div>
+                        <div class="flex items-center justify-center text-gray-300 text-lg">→</div>
+                        <!-- 온라인 -->
+                        <div>
+                          <div class="text-blue-600 font-semibold mb-0.5">온라인 수주</div>
+                          <div class="text-gray-700" x-text="d.online_store"></div>
+                          <div class="text-gray-500" x-text="d.online_date"></div>
+                          <div class="font-medium" x-text="d.online_amount > 0 ? '₩' + d.online_amount.toLocaleString('ko-KR') : '-'"></div>
+                          <template x-if="d.result_type !== 'active_match' && d.compensation > 0">
+                            <span class="text-brand font-bold"
+                              x-text="'보전금 ₩' + d.compensation.toLocaleString('ko-KR')"></span>
+                          </template>
+                        </div>
                       </div>
-                      <div class="text-gray-700" x-text="d.offline_store"></div>
-                      <div class="text-gray-500" x-text="d.offline_date"></div>
-                      <div class="font-medium" x-text="d.offline_amount > 0 ? '₩' + d.offline_amount.toLocaleString('ko-KR') : '-'"></div>
-                      <span x-text="d.cancel_type || d.offline_status" class="text-gray-400"></span>
+                      <!-- 승인/반려 -->
+                      <div class="flex flex-col items-end gap-1.5 shrink-0">
+                        <span :class="{
+                          'badge-pending':  d.status === 'pending',
+                          'badge-approved': d.status === 'approved',
+                          'badge-rejected': d.status === 'rejected',
+                        }" x-text="{ pending:'검토 대기', approved:'승인', rejected:'반려' }[d.status]"></span>
+                        <template x-if="d.status === 'pending'">
+                          <div class="flex gap-1">
+                            <button @click="updateMatchStatus(d.id, 'approved')"
+                              :disabled="!d.result_type"
+                              :class="d.result_type ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+                              class="text-xs px-2 py-1 rounded">승인</button>
+                            <button @click="updateMatchStatus(d.id, 'rejected')"
+                              class="bg-gray-200 hover:bg-red-100 text-gray-600 hover:text-red-600 text-xs px-2 py-1 rounded">반려</button>
+                          </div>
+                        </template>
+                        <template x-if="d.status !== 'pending'">
+                          <button @click="updateMatchStatus(d.id, 'pending')"
+                            class="text-xs text-gray-400 hover:text-gray-600 underline">되돌리기</button>
+                        </template>
+                      </div>
                     </div>
-                    <!-- 화살표 -->
-                    <div class="flex items-center justify-center text-gray-300 text-lg">→</div>
-                    <!-- 온라인 -->
-                    <div>
-                      <div class="text-blue-600 font-semibold mb-0.5">온라인 수주</div>
-                      <div class="text-gray-700" x-text="d.online_store"></div>
-                      <div class="text-gray-500" x-text="d.online_date"></div>
-                      <div class="font-medium" x-text="d.online_amount > 0 ? '₩' + d.online_amount.toLocaleString('ko-KR') : '-'"></div>
-                      <template x-if="d.result_type !== 'active_match' && d.compensation > 0">
-                        <span class="text-brand font-bold"
-                          x-text="'보전금 ₩' + d.compensation.toLocaleString('ko-KR')"></span>
-                      </template>
-                    </div>
+
+                    <!-- 품목 입력 (2차 검증) - 취소 건만 -->
+                    <template x-if="d.result_type !== 'active_match'">
+                      <div class="mt-2 pt-2 border-t border-gray-200">
+                        <button @click="toggleProductForm(d.id)"
+                          class="text-xs flex items-center gap-1 font-medium"
+                          :class="expandedMatch === d.id ? 'text-brand' : 'text-gray-500 hover:text-brand'">
+                          <svg class="w-3 h-3 transition-transform" :class="expandedMatch === d.id ? 'rotate-90' : ''"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                          </svg>
+                          <span x-text="d.items && d.items.length > 0 ? '품목 수정 / 재검증' : '품목 입력 (2차 검증)'"></span>
+                        </button>
+
+                        <div x-show="expandedMatch === d.id" x-cloak class="mt-2 space-y-2">
+                          <template x-if="matchInputs[d.id]">
+                            <div>
+                              <template x-for="(p, idx) in matchInputs[d.id]" :key="idx">
+                                <div class="grid grid-cols-12 gap-1.5 items-center mb-1.5">
+                                  <div class="col-span-3">
+                                    <input type="text" x-model="p.product_name" placeholder="상품명 (선택)"
+                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
+                                  </div>
+                                  <div class="col-span-3">
+                                    <select x-model="p.series"
+                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
+                                      <option value="">시리즈 선택</option>
+                                      <template x-for="s in config.series" :key="s">
+                                        <option :value="s" x-text="s"></option>
+                                      </template>
+                                    </select>
+                                  </div>
+                                  <div class="col-span-3">
+                                    <select x-model="p.category"
+                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
+                                      <option value="">품목 선택</option>
+                                      <template x-for="cat in config.categories" :key="cat">
+                                        <option :value="cat" x-text="cat"></option>
+                                      </template>
+                                    </select>
+                                  </div>
+                                  <div class="col-span-2">
+                                    <input type="number" x-model.number="p.amount" placeholder="금액"
+                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
+                                  </div>
+                                  <div class="col-span-1 text-center">
+                                    <button @click="removeMatchProduct(d.id, idx)"
+                                      class="text-gray-300 hover:text-red-400 text-xs">✕</button>
+                                  </div>
+                                </div>
+                              </template>
+                              <div class="flex gap-2 mt-2">
+                                <button @click="addMatchProduct(d.id)"
+                                  class="text-xs text-brand hover:underline">+ 품목 추가</button>
+                                <button @click="verifyProducts(d.id)"
+                                  class="bg-brand text-white text-xs px-3 py-1 rounded hover:bg-brand-dark">검증 실행</button>
+                              </div>
+                            </div>
+                          </template>
+
+                          <!-- 검증 결과 -->
+                          <template x-if="matchVerifyResults[d.id]">
+                            <div class="mt-2 bg-white rounded p-2 border border-gray-200">
+                              <div class="flex items-center gap-2 mb-1.5">
+                                <span class="text-xs font-semibold" x-text="matchVerifyResults[d.id].message"></span>
+                                <span x-show="matchVerifyResults[d.id].compensation > 0"
+                                  class="text-brand font-bold text-xs"
+                                  x-text="'→ 보전금 ₩' + matchVerifyResults[d.id].compensation.toLocaleString('ko-KR')"></span>
+                              </div>
+                              <div class="space-y-1">
+                                <template x-for="p in matchVerifyResults[d.id].products" :key="p.series + p.category">
+                                  <div class="flex items-center gap-2 text-xs">
+                                    <span :class="p.match_status === 'approved' ? 'badge-full' : 'badge-rejected'"
+                                      x-text="p.match_status === 'approved' ? '인정' : '불인정'"></span>
+                                    <span class="text-gray-700" x-text="(p.product_name || '') + ' ' + p.series + ' ' + p.category"></span>
+                                    <span class="text-gray-400" x-show="p.amount > 0"
+                                      x-text="'₩' + p.amount.toLocaleString('ko-KR')"></span>
+                                  </div>
+                                </template>
+                              </div>
+                            </div>
+                          </template>
+
+                          <!-- 기존 저장된 품목 -->
+                          <template x-if="!matchVerifyResults[d.id] && d.items && d.items.length > 0">
+                            <div class="mt-1 space-y-1">
+                              <div class="text-xs text-gray-500 mb-1">저장된 품목:</div>
+                              <template x-for="p in d.items" :key="p.id">
+                                <div class="flex items-center gap-2 text-xs">
+                                  <span :class="p.match_status === 'approved' ? 'badge-full' : p.match_status === 'rejected' ? 'badge-rejected' : 'badge-pending'"
+                                    x-text="{ approved:'인정', rejected:'불인정', pending:'미검증' }[p.match_status] || '미검증'"></span>
+                                  <span class="text-gray-700" x-text="(p.product_name || '') + ' ' + p.series + ' ' + p.category"></span>
+                                  <span class="text-gray-400" x-show="p.amount > 0"
+                                    x-text="'₩' + p.amount.toLocaleString('ko-KR')"></span>
+                                </div>
+                              </template>
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+                    </template>
                   </div>
                 </template>
               </div>
@@ -972,7 +1099,6 @@ function app() {
       { id: 'dashboard', label: '매장별 집계' },
       { id: 'erp',       label: 'ERP 수주' },
       { id: 'clusters',  label: '매칭 결과 (인별)' },
-      { id: 'matches',   label: '매칭 상세 (주문별)' },
     ],
     config: { series: [], categories: [] },
     events: [],
@@ -1245,7 +1371,8 @@ function app() {
       });
       if (r.ok) {
         this.showToast(status === 'approved' ? '✅ 승인 완료' : '❌ 반려 처리');
-        await Promise.all([this.loadMatches(), this.loadErpStats()]);
+        this.clusterDetailMap = {};  // 상태 변경 후 클러스터 상세 재로드 유도
+        await Promise.all([this.loadMatches(), this.loadErpStats(), this.loadClusters()]);
       }
     },
 
@@ -1280,6 +1407,19 @@ function app() {
         const r = await fetch(`/api/clusters/detail?${params}`);
         const data = await r.json();
         this.clusterDetailMap = { ...this.clusterDetailMap, [key]: data };
+        // 각 match의 기존 품목 데이터를 matchInputs에 복원
+        data.forEach(d => {
+          if (d.items && d.items.length > 0 && !this.matchInputs[d.id]) {
+            this.matchInputs[d.id] = d.items.map(i => ({
+              product_name: i.product_name || '',
+              series: i.series,
+              category: i.category,
+              amount: i.amount || 0,
+            }));
+          } else if (!this.matchInputs[d.id]) {
+            this.matchInputs[d.id] = [{ product_name: '', series: '', category: '', amount: 0 }];
+          }
+        });
       }
       this.clusterExpandedSet = { ...this.clusterExpandedSet, [key]: true };
     },

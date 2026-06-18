@@ -893,6 +893,7 @@ async def upload_erp(file: UploadFile = File(...)):
     i_delivery = ci("확정납기")
     i_amount = ci("수주건별금액")
     i_addr = ci("납품처주소")
+    i_biz = ci("사업소")  # 온라인사업부 여부 판별용
 
     def to_date(v) -> str | None:
         if v is None:
@@ -915,7 +916,8 @@ async def upload_erp(file: UploadFile = File(...)):
             order_name = str(row[i_name]).strip() if row[i_name] else ""
             customer_name = extract_customer_name(order_name)
             base, seq = parse_order_no(order_no)
-            store_type = "online" if store in ONLINE_STORES else "offline"
+            biz = str(row[i_biz]).strip() if (i_biz is not None and row[i_biz]) else ""
+            store_type = "online" if (store in ONLINE_STORES or biz == "온라인사업부") else "offline"
             order_date = to_date(row[i_date])
             delivery_date = to_date(row[i_delivery]) if i_delivery is not None else None
             amount = float(row[i_amount]) if row[i_amount] else 0.0
@@ -1142,16 +1144,26 @@ async def cluster_detail(event_id: int, customer: str, address: str):
                 on_.order_no   AS online_order_no,
                 on_.store_name AS online_store,
                 on_.order_date AS online_date,
-                on_.amount     AS online_amount
+                on_.amount     AS online_amount,
+                e.event_name
             FROM matches m
             JOIN erp_orders of  ON m.offline_order_no = of.order_no
             JOIN erp_orders on_ ON m.online_order_no  = on_.order_no
+            LEFT JOIN events e  ON m.event_id = e.id
             WHERE m.event_id = ?
             AND of.customer_name = ?
             AND of.address_dong = ?
             ORDER BY m.result_type DESC, m.id
         """, (event_id, customer, address)).fetchall()
-    return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            items = conn.execute(
+                "SELECT * FROM match_items WHERE match_id=? ORDER BY id", (r["id"],)
+            ).fetchall()
+            d["items"] = [dict(i) for i in items]
+            result.append(d)
+    return result
 
 
 @app.post("/api/matches/{match_id}/products")
