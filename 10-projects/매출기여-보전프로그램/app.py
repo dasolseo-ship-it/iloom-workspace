@@ -89,6 +89,7 @@ def init_db():
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 online_channel TEXT DEFAULT '네이버',
+                offline_lookback_days INTEGER DEFAULT 7,
                 created_at TEXT DEFAULT (datetime('now', 'localtime'))
             );
 
@@ -166,6 +167,8 @@ def init_db():
         cols = [r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()]
         if "online_channel" not in cols:
             conn.execute("ALTER TABLE events ADD COLUMN online_channel TEXT DEFAULT '네이버'")
+        if "offline_lookback_days" not in cols:
+            conn.execute("ALTER TABLE events ADD COLUMN offline_lookback_days INTEGER DEFAULT 7")
 
 
 init_db()
@@ -222,8 +225,15 @@ def run_matching_engine(conn) -> dict:
     matched = 0
 
     for ev in events:
-        # 행사 기간 내 온라인 수주건 추출 (지정된 채널만)
         channel = ev["online_channel"] if ev["online_channel"] else "네이버"
+        ann_date = date.fromisoformat(ev["announcement_date"])
+        lookback = ev["offline_lookback_days"] if ev["offline_lookback_days"] else 7
+
+        # 오프라인 수주 범위: (공지일 - 소급일수) ~ 공지일 전날(D-1)
+        offline_order_from = (ann_date - timedelta(days=lookback)).isoformat()
+        offline_order_to = ev["announcement_date"]  # 공지일 미만 (exclusive)
+
+        # 행사 기간 내 온라인 수주건 (지정 플랫폼만 인정)
         online_orders = conn.execute("""
             SELECT * FROM erp_orders
             WHERE store_type = 'online'
@@ -241,13 +251,16 @@ def run_matching_engine(conn) -> dict:
         ]
 
         for oo in online_orders:
+            # 공지일 이전 수주건만: offline_order_from ~ 공지일 전날(D-1)
             offline_orders = conn.execute("""
                 SELECT * FROM erp_orders
                 WHERE store_type = 'offline'
                 AND customer_name = ?
                 AND address_dong = ?
+                AND order_date >= ?
                 AND order_date < ?
-            """, (oo["customer_name"], oo["address_dong"], ev["announcement_date"])).fetchall()
+            """, (oo["customer_name"], oo["address_dong"],
+                  offline_order_from, offline_order_to)).fetchall()
 
             for of in offline_orders:
                 exists = conn.execute(
@@ -376,6 +389,7 @@ class EventIn(BaseModel):
     start_date: str
     end_date: str
     online_channel: str = "네이버"
+    offline_lookback_days: int = 30
     products: List[ProductIn]
 
 
@@ -447,8 +461,8 @@ async def create_event(event: EventIn):
             )
 
         cur = conn.execute(
-            "INSERT INTO events (event_name, announcement_date, start_date, end_date, online_channel) VALUES (?,?,?,?,?)",
-            (event.event_name, event.announcement_date, event.start_date, event.end_date, event.online_channel),
+            "INSERT INTO events (event_name, announcement_date, start_date, end_date, online_channel, offline_lookback_days) VALUES (?,?,?,?,?,?)",
+            (event.event_name, event.announcement_date, event.start_date, event.end_date, event.online_channel, event.offline_lookback_days),
         )
         event_id = cur.lastrowid
         for p in event.products:
@@ -468,11 +482,13 @@ async def list_events():
             products = conn.execute(
                 "SELECT * FROM event_products WHERE event_id=?", (e["id"],)
             ).fetchall()
-            # 오프라인 취소 추출 기간 자동 계산 (공지 다음날부터 취소된 수주가 대상)
             ann = date.fromisoformat(e["announcement_date"])
             day_after = (ann + timedelta(days=1)).isoformat()
+            lookback = e["offline_lookback_days"] if e["offline_lookback_days"] else 30
+            offline_order_from = (ann - timedelta(days=lookback)).isoformat()
             ev_dict = dict(e)
-            ev_dict["offline_extract_from"] = day_after  # ERP 추출 시 이 날짜부터 취소된 오프라인 수주 포함
+            ev_dict["offline_extract_from"] = day_after
+            ev_dict["offline_order_from"] = offline_order_from  # 오프라인 수주 하한일
             ev_dict["products"] = [dict(p) for p in products]
             result.append(ev_dict)
     return result
@@ -564,13 +580,15 @@ async def create_order(order: OrderIn):
         if not event:
             raise HTTPException(404, "행사를 찾을 수 없습니다")
 
-        # D-1 체크
+        # 수주 기간 체크: D-1 ~ 행사 마지막날
         od = date.fromisoformat(order.order_date)
         ad = date.fromisoformat(event["announcement_date"])
-        if od > ad - timedelta(days=1):
+        d_minus_1 = ad - timedelta(days=1)
+        event_end = date.fromisoformat(event["end_date"])
+        if od < d_minus_1 or od > event_end:
             raise HTTPException(
                 400,
-                f"수주일({order.order_date})이 행사 공지 D-1({ad - timedelta(days=1)}) 이후입니다. 매출기여 대상 외."
+                f"수주일({order.order_date})이 대상 기간(D-1: {d_minus_1} ~ 행사종료: {event_end}) 밖입니다. 매출기여 대상 외."
             )
 
         event_products = [
