@@ -120,9 +120,12 @@
             <div class="w-8 h-8 rounded-full bg-brand text-white text-sm font-bold flex items-center justify-center flex-shrink-0">1</div>
             <div class="w-0.5 h-8 bg-gray-200 mt-1"></div>
           </div>
-          <div class="pb-4">
-            <div class="font-semibold text-gray-800 text-sm">행사 등록</div>
-            <div class="text-xs text-gray-500 mt-0.5">커넥트플러스 공지 확인 → 시스템에 행사 입력 (공지일, 기간, 품목)</div>
+          <div class="pb-4 flex-1 flex items-start justify-between">
+            <div>
+              <div class="font-semibold text-gray-800 text-sm">행사 등록</div>
+              <div class="text-xs text-gray-500 mt-0.5">커넥트플러스 공지 확인 → 시스템에 행사 입력 (공지일, 기간, 품목)</div>
+            </div>
+            <button @click="activeTab='events'" class="text-xs text-brand hover:underline shrink-0 ml-4 mt-0.5">바로가기 →</button>
           </div>
         </div>
 
@@ -131,31 +134,34 @@
             <div class="w-8 h-8 rounded-full bg-brand text-white text-sm font-bold flex items-center justify-center flex-shrink-0">2</div>
             <div class="w-0.5 h-8 bg-gray-200 mt-1"></div>
           </div>
-          <div class="pb-4">
-            <div class="font-semibold text-gray-800 text-sm">ERP 수주 데이터 업로드</div>
-            <div class="text-xs text-gray-500 mt-0.5">ERP에서 해당 기간 수주 내역 엑셀 추출 → 시스템 업로드</div>
+          <div class="pb-4 flex-1 flex items-start justify-between">
+            <div>
+              <div class="font-semibold text-gray-800 text-sm">ERP 수주 데이터 업로드</div>
+              <div class="text-xs text-gray-500 mt-0.5">ERP에서 해당 기간 수주 내역 엑셀 추출 → 시스템 업로드 (자동으로 취소 분류 + 매칭 실행)</div>
+            </div>
+            <button @click="activeTab='erp'" class="text-xs text-brand hover:underline shrink-0 ml-4 mt-0.5">바로가기 →</button>
           </div>
         </div>
 
         <div class="flex items-start gap-3">
           <div class="flex flex-col items-center">
-            <div class="w-8 h-8 rounded-full bg-brand text-white text-sm font-bold flex items-center justify-center flex-shrink-0">3</div>
+            <div class="w-8 h-8 rounded-full bg-gray-300 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">3</div>
             <div class="w-0.5 h-8 bg-gray-200 mt-1"></div>
           </div>
           <div class="pb-4">
-            <div class="font-semibold text-gray-800 text-sm">취소건 자동 분류</div>
-            <div class="text-xs text-gray-500 mt-0.5">수주번호 suffix로 <span class="font-medium text-gray-700">순수취소</span> vs <span class="font-medium text-gray-700">납기변경</span> 자동 구별 → 순수취소만 보전 후보</div>
+            <div class="font-semibold text-gray-600 text-sm">취소건 자동 분류 <span class="text-xs font-normal text-gray-400">(자동)</span></div>
+            <div class="text-xs text-gray-400 mt-0.5">수주번호 suffix로 <span class="font-medium text-gray-600">순수취소</span> vs <span class="font-medium text-gray-600">납기변경</span> 자동 구별 → 순수취소만 보전 후보</div>
           </div>
         </div>
 
         <div class="flex items-start gap-3">
           <div class="flex flex-col items-center">
-            <div class="w-8 h-8 rounded-full bg-brand text-white text-sm font-bold flex items-center justify-center flex-shrink-0">4</div>
+            <div class="w-8 h-8 rounded-full bg-gray-300 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">4</div>
             <div class="w-0.5 h-8 bg-gray-200 mt-1"></div>
           </div>
           <div class="pb-4">
-            <div class="font-semibold text-gray-800 text-sm">1차 고객 매칭 (자동)</div>
-            <div class="text-xs text-gray-500 mt-0.5">고객명 + 동(洞) 주소로 오프라인 취소 고객 = 온라인 주문 고객 여부 확인</div>
+            <div class="font-semibold text-gray-600 text-sm">1차 고객 매칭 <span class="text-xs font-normal text-gray-400">(자동)</span></div>
+            <div class="text-xs text-gray-400 mt-0.5">고객명 + 동(洞) 주소로 오프라인 취소 고객 = 온라인 주문 고객 여부 확인</div>
           </div>
         </div>
 
@@ -164,9 +170,12 @@
             <div class="w-8 h-8 rounded-full bg-brand text-white text-sm font-bold flex items-center justify-center flex-shrink-0">5</div>
             <div class="w-0.5 h-8 bg-gray-200 mt-1"></div>
           </div>
-          <div class="pb-4">
-            <div class="font-semibold text-gray-800 text-sm">2차 품목 검증 (반수동)</div>
-            <div class="text-xs text-gray-500 mt-0.5">매칭 카드에서 오프라인 취소 품목 입력 → 행사 품목과 자동 비교 → 인정 / 부분인정 / 불인정</div>
+          <div class="pb-4 flex-1 flex items-start justify-between">
+            <div>
+              <div class="font-semibold text-gray-800 text-sm">2차 품목 검증 + 승인/반려</div>
+              <div class="text-xs text-gray-500 mt-0.5">매칭 카드에서 오프라인 취소 품목 입력 → 행사 품목 자동 비교 → 인정/부분인정/불인정</div>
+            </div>
+            <button @click="activeTab='clusters'" class="text-xs text-brand hover:underline shrink-0 ml-4 mt-0.5">바로가기 →</button>
           </div>
         </div>
 
@@ -174,9 +183,12 @@
           <div class="flex flex-col items-center">
             <div class="w-8 h-8 rounded-full bg-brand text-white text-sm font-bold flex items-center justify-center flex-shrink-0">6</div>
           </div>
-          <div class="pb-1">
-            <div class="font-semibold text-gray-800 text-sm">보전금 산출 + 엑셀 출력</div>
-            <div class="text-xs text-gray-500 mt-0.5">인정 품목 금액 × 5% → 매장별 집계 + 위탁수수료 엑셀 자동 출력</div>
+          <div class="pb-1 flex-1 flex items-start justify-between">
+            <div>
+              <div class="font-semibold text-gray-800 text-sm">보전금 산출 + 엑셀 출력</div>
+              <div class="text-xs text-gray-500 mt-0.5">인정 품목 금액 × 5% → 매장별 집계 + 위탁수수료 엑셀 자동 출력</div>
+            </div>
+            <button @click="activeTab='dashboard'" class="text-xs text-brand hover:underline shrink-0 ml-4 mt-0.5">바로가기 →</button>
           </div>
         </div>
 
@@ -242,7 +254,7 @@
   ================================ -->
   <div x-show="activeTab === 'events'" x-cloak>
     <div class="flex justify-between items-center mb-4">
-      <h2 class="font-semibold text-gray-700">온라인 행사 목록 (커넥트플러스)</h2>
+      <h2 class="font-semibold text-gray-700">① 행사 등록 <span class="text-gray-400 font-normal text-sm">— 커넥트플러스 공지 기준</span></h2>
       <div class="flex gap-2">
         <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm px-3 py-1.5 rounded flex items-center gap-1.5">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -303,227 +315,13 @@
     </div>
   </div>
 
-  <!-- ===============================
-       TAB 2: 수주 입력
-  ================================ -->
-  <div x-show="activeTab === 'orders'" x-cloak>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- 입력 폼 -->
-      <div class="bg-white rounded border border-gray-200 p-5">
-        <h2 class="font-semibold text-gray-700 mb-4">취소 수주 입력</h2>
-        <div class="space-y-3">
-          <div>
-            <label class="text-xs font-medium text-gray-600 mb-1 block">매장명</label>
-            <input type="text" x-model="orderForm.store_name" placeholder="예: 롯데인천2" list="store-list">
-            <datalist id="store-list">
-              <option value="송도5">
-              <option value="인천검단">
-              <option value="인천중앙2">
-              <option value="김포5">
-              <option value="부천3">
-              <option value="의정부8">
-              <option value="신세계시흥2">
-              <option value="현대목동">
-              <option value="롯데구리">
-              <option value="롯데인천2">
-              <option value="롯데영등포">
-            </datalist>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-600 mb-1 block">수주 등록일 <span class="text-red-500 font-normal">(행사 공지 D-1 이전이어야 함)</span></label>
-            <input type="date" x-model="orderForm.order_date">
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-600 mb-1 block">고객 결제액 (원)</label>
-            <input type="number" x-model="orderForm.customer_amount" placeholder="예: 1500000" min="0">
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-600 mb-1 block">관련 온라인 행사</label>
-            <select x-model="orderForm.event_id">
-              <option value="">행사 선택...</option>
-              <template x-for="e in events" :key="e.id">
-                <option :value="e.id" x-text="e.event_name + ' (공지: ' + e.announcement_date + ')'"></option>
-              </template>
-            </select>
-          </div>
-
-          <!-- 수주 상품 목록 -->
-          <div>
-            <div class="flex justify-between items-center mb-2">
-              <label class="text-xs font-medium text-gray-600">수주 상품</label>
-              <button @click="addOrderProduct()" class="text-xs text-brand hover:underline">+ 상품 추가</button>
-            </div>
-            <div class="space-y-2">
-              <template x-for="(p, i) in orderForm.products" :key="i">
-                <div class="border border-gray-100 rounded p-2 space-y-1.5 bg-gray-50">
-                  <input type="text" x-model="p.product_name" placeholder="상품명 (예: 쿠시노 1100폭)">
-                  <div class="grid grid-cols-2 gap-1.5">
-                    <select x-model="p.series">
-                      <option value="">시리즈 선택</option>
-                      <template x-for="s in config.series" :key="s">
-                        <option :value="s" x-text="s"></option>
-                      </template>
-                    </select>
-                    <select x-model="p.category">
-                      <option value="">품목 선택</option>
-                      <template x-for="c in config.categories" :key="c">
-                        <option :value="c" x-text="c"></option>
-                      </template>
-                    </select>
-                  </div>
-                  <button @click="orderForm.products.splice(i,1)" class="text-xs text-gray-400 hover:text-red-500">삭제</button>
-                </div>
-              </template>
-              <template x-if="orderForm.products.length === 0">
-                <div class="text-xs text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded">상품을 추가하세요</div>
-              </template>
-            </div>
-          </div>
-
-          <button
-            @click="submitOrder()"
-            :disabled="submitting"
-            class="w-full bg-brand text-white rounded py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50 transition-colors">
-            <span x-show="!submitting">매칭 실행</span>
-            <span x-show="submitting">처리 중...</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 결과 패널 -->
-      <div>
-        <template x-if="lastResult">
-          <div class="bg-white rounded border-2 p-5"
-            :class="{
-              'border-green-400': lastResult.result_type === 'full',
-              'border-yellow-400': lastResult.result_type === 'partial',
-              'border-red-400': lastResult.result_type === 'rejected'
-            }">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="text-lg font-bold" x-text="lastResult.message"></span>
-            </div>
-            <template x-if="lastResult.result_type !== 'rejected'">
-              <div class="bg-gray-50 rounded p-3 mb-4">
-                <div class="text-xs text-gray-500">보전금액 (결제액 × 5%)</div>
-                <div class="text-2xl font-bold text-brand" x-text="'₩' + lastResult.compensation.toLocaleString('ko-KR')"></div>
-              </div>
-            </template>
-            <div class="text-xs font-medium text-gray-600 mb-2">상품별 인정 결과</div>
-            <div class="space-y-1.5">
-              <template x-for="p in lastResult.products" :key="p.product_name">
-                <div class="flex items-center justify-between text-sm">
-                  <span x-text="p.product_name" class="text-gray-700"></span>
-                  <span :class="p.match_status === 'approved' ? 'badge-full' : 'badge-rejected'"
-                        x-text="p.match_status === 'approved' ? '인정' : '불인정'"></span>
-                </div>
-              </template>
-            </div>
-            <template x-if="lastResult.note">
-              <div class="mt-3 text-xs text-yellow-600 bg-yellow-50 rounded p-2" x-text="lastResult.note"></div>
-            </template>
-          </div>
-        </template>
-        <template x-if="!lastResult">
-          <div class="bg-white rounded border border-dashed border-gray-200 p-12 text-center text-gray-400 text-sm">
-            수주 정보를 입력하고 매칭을 실행하면<br>결과가 여기 표시됩니다
-          </div>
-        </template>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===============================
-       TAB 3: 결과 조회
-  ================================ -->
-  <div x-show="activeTab === 'results'" x-cloak>
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="font-semibold text-gray-700">수주 처리 결과</h2>
-      <div class="flex items-center gap-3">
-        <div class="flex gap-2 text-xs">
-          <button @click="filterType=''" :class="filterType==='' ? 'text-brand font-semibold' : 'text-gray-500'" class="hover:text-brand">전체</button>
-          <button @click="filterType='full'" :class="filterType==='full' ? 'text-green-600 font-semibold' : 'text-gray-500'" class="hover:text-green-600">전체인정</button>
-          <button @click="filterType='partial'" :class="filterType==='partial' ? 'text-yellow-600 font-semibold' : 'text-gray-500'" class="hover:text-yellow-600">부분인정</button>
-          <button @click="filterType='rejected'" :class="filterType==='rejected' ? 'text-red-500 font-semibold' : 'text-gray-500'" class="hover:text-red-500">불인정</button>
-        </div>
-        <button @click="exportExcel()"
-          class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-          </svg>
-          엑셀 내보내기
-        </button>
-      </div>
-    </div>
-
-    <div class="bg-white rounded border border-gray-200 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
-          <tr>
-            <th class="px-4 py-3 text-left">매장</th>
-            <th class="px-4 py-3 text-left">수주일</th>
-            <th class="px-4 py-3 text-left">행사명</th>
-            <th class="px-4 py-3 text-right">결제액</th>
-            <th class="px-4 py-3 text-right">보전금</th>
-            <th class="px-4 py-3 text-center">결과</th>
-            <th class="px-4 py-3"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-          <template x-for="o in filteredOrders" :key="o.id">
-            <tr class="hover:bg-gray-50">
-              <td class="px-4 py-3 font-medium" x-text="o.store_name"></td>
-              <td class="px-4 py-3 text-gray-500" x-text="o.order_date"></td>
-              <td class="px-4 py-3 text-gray-600 text-xs" x-text="o.event_name || '-'"></td>
-              <td class="px-4 py-3 text-right" x-text="'₩' + o.customer_amount.toLocaleString('ko-KR')"></td>
-              <td class="px-4 py-3 text-right font-medium text-brand"
-                  x-text="o.compensation > 0 ? '₩' + o.compensation.toLocaleString('ko-KR') : '-'"></td>
-              <td class="px-4 py-3 text-center">
-                <span :class="{
-                  'badge-full': o.result_type === 'full',
-                  'badge-partial': o.result_type === 'partial',
-                  'badge-rejected': o.result_type === 'rejected',
-                  'badge-pending': !o.result_type
-                }" x-text="{full:'전체인정', partial:'부분인정', rejected:'불인정'}[o.result_type] || '-'"></span>
-              </td>
-              <td class="px-4 py-3">
-                <button @click="deleteOrder(o.id)" class="text-gray-300 hover:text-red-400 text-xs">삭제</button>
-              </td>
-            </tr>
-            <!-- 상품 상세 -->
-            <tr class="bg-gray-50">
-              <td colspan="7" class="px-4 pb-3">
-                <div class="flex flex-wrap gap-1.5 mt-1">
-                  <template x-for="p in o.products" :key="p.id">
-                    <span class="text-xs px-2 py-0.5 rounded border"
-                      :class="p.match_status === 'approved'
-                        ? 'bg-green-50 border-green-200 text-green-700'
-                        : 'bg-red-50 border-red-200 text-red-600'"
-                      x-text="p.product_name + ' (' + (p.match_status==='approved' ? '인정' : '불인정') + ')'">
-                    </span>
-                  </template>
-                </div>
-                <template x-if="o.note">
-                  <div class="mt-1 text-xs text-yellow-600" x-text="'⚠ ' + o.note"></div>
-                </template>
-              </td>
-            </tr>
-          </template>
-          <template x-if="filteredOrders.length === 0">
-            <tr>
-              <td colspan="7" class="text-center py-10 text-gray-400">데이터가 없습니다</td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
   <!-- ===============================
        TAB 4: 매장별 집계
   ================================ -->
   <div x-show="activeTab === 'dashboard'" x-cloak>
     <div class="flex justify-between items-center mb-4">
-      <h2 class="font-semibold text-gray-700">매장별 보전금 집계</h2>
+      <h2 class="font-semibold text-gray-700">④ 보전 집계 <span class="text-gray-400 font-normal text-sm">— 매장별 보전금 합산</span></h2>
       <button @click="exportExcel()"
         class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -615,9 +413,12 @@
   </div>
 
   <!-- ===============================
-       TAB 5: ERP 수주
+       TAB: ERP 업로드
   ================================ -->
   <div x-show="activeTab === 'erp'" x-cloak>
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="font-semibold text-gray-700">② ERP 업로드 <span class="text-gray-400 font-normal text-sm">— 수주 데이터 업로드 후 자동 매칭</span></h2>
+    </div>
     <!-- ERP 요약 카드 -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
       <div class="bg-white rounded border border-gray-200 p-4 text-center">
@@ -929,7 +730,7 @@
   <div x-show="activeTab === 'clusters'" x-cloak>
     <div class="flex justify-between items-center mb-4">
       <div>
-        <h2 class="font-semibold text-gray-700">매칭 결과 <span class="text-gray-400 font-normal text-sm" x-text="'(' + clusters.length + '명)'"></span></h2>
+        <h2 class="font-semibold text-gray-700">③ 매칭 결과 <span class="text-gray-400 font-normal text-sm" x-text="'(' + clusters.length + '명)'"></span></h2>
         <div class="flex gap-3 mt-1 text-xs">
           <span class="text-red-600 font-medium" x-text="'보전후보 ' + clusters.filter(c => c.pending_cnt > 0 || c.cancel_cnt > 0).length + '명'"></span>
           <span class="text-gray-400" x-text="'모니터링 ' + clusters.filter(c => c.pending_cnt === 0 && c.cancel_cnt === 0).length + '명'"></span>
@@ -944,6 +745,10 @@
           </template>
         </select>
         <button @click="loadClusters()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded">새로고침</button>
+        <button @click="showManualMatchModal = true" class="bg-brand hover:bg-brand-dark text-white text-xs px-3 py-1.5 rounded flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          수기 매칭 등록
+        </button>
       </div>
     </div>
 
@@ -1256,6 +1061,49 @@
   </div>
 </div>
 
+<!-- ===============================
+     수기 매칭 등록 Modal
+================================ -->
+<div x-show="showManualMatchModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6" @click.outside="showManualMatchModal = false">
+    <h3 class="font-semibold text-gray-800 mb-1">수기 매칭 등록</h3>
+    <p class="text-xs text-gray-500 mb-4">담당자가 상세주소(호수)까지 동일함을 직접 확인한 동명이인/가족 명의 예외 건</p>
+
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">행사 선택</label>
+        <select x-model="manualMatchForm.event_id" class="w-full">
+          <option value="">-- 행사를 선택하세요 --</option>
+          <template x-for="e in events" :key="e.id">
+            <option :value="e.id" x-text="e.event_name"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">오프라인 수주번호 <span class="text-red-500">*</span></label>
+        <input type="text" x-model="manualMatchForm.offline_order_no" placeholder="예) I20260529-0088-00" class="w-full font-mono text-sm">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">온라인 수주번호 <span class="text-red-500">*</span></label>
+        <input type="text" x-model="manualMatchForm.online_order_no" placeholder="예) I20260515-0123-00" class="w-full font-mono text-sm">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">소명 사유</label>
+        <textarea x-model="manualMatchForm.reason" rows="2" placeholder="예) 부부 동일 주소 확인 (서울시 강남구 역삼동 OO아파트 101호)" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-brand resize-none"></textarea>
+      </div>
+    </div>
+
+    <div class="mt-5 flex gap-2">
+      <button @click="submitManualMatch()" :disabled="submitting"
+        class="flex-1 bg-brand text-white rounded py-2 text-sm hover:bg-brand-dark disabled:opacity-50">
+        <span x-show="!submitting">수기 등록</span>
+        <span x-show="submitting">처리 중...</span>
+      </button>
+      <button @click="showManualMatchModal = false; resetManualMatchForm()" class="flex-1 border border-gray-300 text-gray-600 rounded py-2 text-sm hover:bg-gray-50">취소</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div
   x-show="toast.show" x-cloak x-transition
@@ -1270,12 +1118,10 @@ function app() {
     activeTab: 'overview',
     tabs: [
       { id: 'overview',  label: '개요' },
-      { id: 'events',    label: '행사 관리' },
-      { id: 'orders',    label: '수주 입력' },
-      { id: 'results',   label: '결과 조회' },
-      { id: 'dashboard', label: '매장별 집계' },
-      { id: 'erp',       label: 'ERP 수주' },
-      { id: 'clusters',  label: '매칭 결과 (인별)' },
+      { id: 'events',    label: '① 행사 등록' },
+      { id: 'erp',       label: '② ERP 업로드' },
+      { id: 'clusters',  label: '③ 매칭 결과' },
+      { id: 'dashboard', label: '④ 보전 집계' },
     ],
     config: { series: [], categories: [] },
     events: [],
@@ -1296,6 +1142,8 @@ function app() {
     clusterDetailMap: {},  // key → detail rows
     clusterExpandedSet: {},
     showEventModal: false,
+    showManualMatchModal: false,
+    manualMatchForm: { event_id: '', offline_order_no: '', online_order_no: '', reason: '' },
     submitting: false,
     lastResult: null,
     toast: { show: false, message: '', type: 'success' },
@@ -1605,6 +1453,41 @@ function app() {
 
     get clusterDetails() {
       return this.clusterDetailMap;
+    },
+
+    resetManualMatchForm() {
+      this.manualMatchForm = { event_id: '', offline_order_no: '', online_order_no: '', reason: '' };
+    },
+
+    async submitManualMatch() {
+      const f = this.manualMatchForm;
+      if (!f.event_id || !f.offline_order_no.trim() || !f.online_order_no.trim()) {
+        this.showToast('행사, 오프라인/온라인 수주번호는 필수입니다', 'error');
+        return;
+      }
+      this.submitting = true;
+      try {
+        const r = await fetch('/api/matches/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_id: parseInt(f.event_id),
+            offline_order_no: f.offline_order_no.trim(),
+            online_order_no: f.online_order_no.trim(),
+            reason: f.reason.trim(),
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || '등록 실패');
+        this.showToast(data.message);
+        this.showManualMatchModal = false;
+        this.resetManualMatchForm();
+        await this.loadClusters();
+      } catch (e) {
+        this.showToast(e.message, 'error');
+      } finally {
+        this.submitting = false;
+      }
     },
 
     showToast(message, type = 'success') {
