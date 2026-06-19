@@ -413,6 +413,13 @@ class MatchStatusUpdate(BaseModel):
     status: str
 
 
+class ManualMatchIn(BaseModel):
+    offline_order_no: str
+    online_order_no: str
+    event_id: int
+    reason: str = ""
+
+
 class MatchProductIn(BaseModel):
     product_name: str = ""
     series: str
@@ -1262,6 +1269,60 @@ async def update_match(match_id: int, body: MatchStatusUpdate):
     with get_db() as conn:
         conn.execute("UPDATE matches SET status=? WHERE id=?", (body.status, match_id))
     return {"message": "상태 업데이트 완료"}
+
+
+@app.post("/api/matches/manual")
+async def create_manual_match(body: ManualMatchIn):
+    """수기 매칭 등록 — 담당자가 호수까지 확인한 동명이인/가족 명의 예외 처리"""
+    with get_db() as conn:
+        offline = conn.execute(
+            "SELECT * FROM erp_orders WHERE order_no=?", (body.offline_order_no,)
+        ).fetchone()
+        if not offline:
+            raise HTTPException(404, f"오프라인 수주번호를 찾을 수 없습니다: {body.offline_order_no}")
+
+        online = conn.execute(
+            "SELECT * FROM erp_orders WHERE order_no=?", (body.online_order_no,)
+        ).fetchone()
+        if not online:
+            raise HTTPException(404, f"온라인 수주번호를 찾을 수 없습니다: {body.online_order_no}")
+
+        exists = conn.execute(
+            "SELECT 1 FROM matches WHERE offline_order_no=? AND online_order_no=?",
+            (body.offline_order_no, body.online_order_no)
+        ).fetchone()
+        if exists:
+            raise HTTPException(400, "이미 매칭된 건입니다")
+
+        is_cancel = (
+            offline["order_status"] == "취소"
+            and offline["cancel_type"] == "pure_cancel"
+        )
+        is_delivered = online["order_status"] in DELIVERY_DONE_STATUSES
+
+        if is_cancel and is_delivered:
+            result_type = "cancel_match_delivered"
+            compensation = round((offline["amount"] or 0) * 0.05, 0)
+        elif is_cancel:
+            result_type = "cancel_match_pending"
+            compensation = 0
+        else:
+            result_type = "active_match"
+            compensation = 0
+
+        keys = json.dumps(["manual", body.reason] if body.reason else ["manual"])
+        conn.execute("""
+            INSERT INTO matches
+            (offline_order_no, online_order_no, event_id, match_keys,
+             match_confidence, result_type, compensation)
+            VALUES (?,?,?,?,?,?,?)
+        """, (
+            body.offline_order_no, body.online_order_no, body.event_id,
+            keys, "manual", result_type, compensation,
+        ))
+
+    label = {"cancel_match_delivered": "✅ 보전 확정", "cancel_match_pending": "⏳ 보전 대기", "active_match": "모니터링"}
+    return {"message": f"수기 매칭 등록 완료 — {label.get(result_type, result_type)}"}
 
 
 if __name__ == "__main__":
