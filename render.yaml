@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: iloom-onoff-compensation
+    runtime: python
+    rootDir: 10-projects/매출기여-보전프로그램
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DB_PATH
+        value: /data/sales_contribution.db
+      - key: PYTHONIOENCODING
+        value: utf-8
+    disk:
+      name: db-storage
+      mountPath: /data
+      sizeGB: 1

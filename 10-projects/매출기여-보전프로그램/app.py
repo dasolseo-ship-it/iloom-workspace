@@ -2,6 +2,7 @@
 매출기여 보전 프로그램
 온라인 행사로 인한 오프라인 수주 취소건 보전금 관리
 """
+import os
 import re
 import json
 import sqlite3
@@ -19,7 +20,7 @@ from pydantic import BaseModel
 app = FastAPI(title="매출기여 보전 프로그램")
 templates = Jinja2Templates(directory="templates")
 
-DB_PATH = "sales_contribution.db"
+DB_PATH = os.environ.get("DB_PATH", "sales_contribution.db")
 
 # ================================================================
 # 일룸 시리즈 / 품목 설정
