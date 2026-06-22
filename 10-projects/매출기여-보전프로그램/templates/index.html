@@ -1410,7 +1410,9 @@ function app() {
 
     async loadClusters() {
       const r = await fetch(`/api/clusters?event_id=${this.clusterEventId}`);
-      this.clusters = await r.json();
+      const data = await r.json();
+      const rank = c => c.cancel_cnt > 0 ? 0 : c.pending_cnt > 0 ? 1 : 2;
+      this.clusters = data.sort((a, b) => rank(a) - rank(b));
     },
 
     clusterKey(c) {
