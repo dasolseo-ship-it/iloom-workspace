@@ -99,9 +99,9 @@
         <div class="text-xs text-gray-500">커넥트플러스 공지 온라인 행사 한정</div>
       </div>
       <div class="bg-white rounded border border-gray-200 p-4 text-center">
-        <div class="text-base font-bold text-gray-800 mb-1">납기 확정 후 익월 정산</div>
+        <div class="text-base font-bold text-gray-800 mb-1">납기 완료 후 익월 정산</div>
         <div class="text-sm font-semibold text-gray-700 mb-0.5">정산 시점</div>
-        <div class="text-xs text-gray-500">행사 공지 D-1일 전 등록 수주건 한정</div>
+        <div class="text-xs text-brand">행사 종료 D+1개월 이내 납기건에 한하여 익월 정산</div>
       </div>
       <div class="bg-white rounded border border-gray-200 p-4 text-center">
         <div class="text-3xl font-bold text-brand mb-1">5%</div>
@@ -136,8 +136,8 @@
           </div>
           <div class="pb-4 flex-1 flex items-start justify-between">
             <div>
-              <div class="font-semibold text-gray-800 text-sm">ERP 수주 데이터 업로드</div>
-              <div class="text-xs text-gray-500 mt-0.5">ERP에서 해당 기간 수주 내역 엑셀 추출 → 시스템 업로드 (자동으로 취소 분류 + 매칭 실행)</div>
+              <div class="font-semibold text-gray-800 text-sm">태블로 수주 데이터 업로드</div>
+              <div class="text-xs text-gray-500 mt-0.5">행사 종료 D+1개월 후 → 태블로에서 행사 수주기간만 추출 → 업로드 (핸드폰 뒷4자리 + 품목 포함)</div>
             </div>
             <button @click="activeTab='erp'" class="text-xs text-brand hover:underline shrink-0 ml-4 mt-0.5">바로가기 →</button>
           </div>
@@ -161,7 +161,7 @@
           </div>
           <div class="pb-4">
             <div class="font-semibold text-gray-600 text-sm">1차 고객 매칭 <span class="text-xs font-normal text-gray-400">(자동)</span></div>
-            <div class="text-xs text-gray-400 mt-0.5">고객명 + 동(洞) 주소로 오프라인 취소 고객 = 온라인 주문 고객 여부 확인</div>
+            <div class="text-xs text-gray-400 mt-0.5">고객명 + 동(洞) 주소 + 핸드폰 뒷4자리로 오프라인 취소 고객 = 온라인 주문 고객 여부 확인</div>
           </div>
         </div>
 
@@ -301,15 +301,6 @@
             </div>
             <button @click="deleteEvent(event.id)" class="text-gray-300 hover:text-red-400 transition-colors text-xs">삭제</button>
           </div>
-          <div class="mt-3 flex flex-wrap gap-1.5">
-            <template x-for="p in event.products" :key="p.id">
-              <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-                <span x-text="p.series" class="font-medium text-gray-700"></span>
-                &nbsp;<span x-text="p.category" class="text-gray-500"></span>
-                &nbsp;<span x-text="'(' + p.product_name + ')'" class="text-gray-400"></span>
-              </span>
-            </template>
-          </div>
         </div>
       </template>
     </div>
@@ -413,11 +404,11 @@
   </div>
 
   <!-- ===============================
-       TAB: ERP 업로드
+       TAB: 데이터 업로드
   ================================ -->
   <div x-show="activeTab === 'erp'" x-cloak>
     <div class="flex justify-between items-center mb-5">
-      <h2 class="font-semibold text-gray-700">② ERP 업로드 <span class="text-gray-400 font-normal text-sm">— 수주 데이터 업로드 후 자동 매칭</span></h2>
+      <h2 class="font-semibold text-gray-700">② 데이터 업로드 <span class="text-gray-400 font-normal text-sm">— 태블로 수주 데이터 업로드 후 자동 매칭</span></h2>
     </div>
     <!-- ERP 요약 카드 -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
@@ -464,14 +455,19 @@
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
           </svg>
-          ERP 파일 업로드
+          태블로 업로드
+          <input type="file" accept=".xlsx" class="hidden" @change="uploadTableau($event)">
+        </label>
+        <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded flex items-center gap-1.5">
+          ERP 업로드
           <input type="file" accept=".xlsx" class="hidden" @change="uploadErp($event)">
         </label>
       </div>
     </div>
 
     <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-700">
-      ERP → 수주조회 화면에서 Excel 내보내기 후 업로드. 자동으로 취소유형 분류 및 온라인 매칭을 실행합니다.
+      <strong>태블로 업로드 (권장)</strong>: 태블로에서 행사 수주기간 데이터 다운로드 후 업로드. 핸드폰 뒷4자리 + 품목 정보 포함으로 정밀 매칭합니다.<br>
+      <span class="text-blue-500">컬럼 형식: 수주번호 | 수주건명 | 수주상태 | 실적대리점 | 주문일자일 | 동 | 핸드폰번호 | 시리즈 | 품목 | ...</span>
     </div>
 
     <div class="bg-white rounded border border-gray-200 overflow-hidden">
@@ -784,7 +780,7 @@
               </template>
               <div class="flex gap-1.5 mt-1 justify-end flex-wrap">
                 <template x-if="c.cancel_cnt > 0">
-                  <span class="badge-delivered" x-text="'보전확정 ' + c.cancel_cnt + '건'"></span>
+                  <span class="badge-delivered" x-text="'보전 후보 ' + c.cancel_cnt + '건'"></span>
                 </template>
                 <template x-if="c.pending_cnt > 0">
                   <span class="badge-delivery-pending" x-text="'납기대기 ' + c.pending_cnt + '건'"></span>
@@ -826,10 +822,15 @@
                         <div>
                           <div class="font-semibold mb-0.5"
                             :class="d.result_type !== 'active_match' ? 'text-red-600' : 'text-gray-500'">
-                            <span x-text="d.result_type === 'cancel_match_delivered' ? '취소 · 보전확정' : d.result_type === 'cancel_match_pending' ? '취소 · 납기대기' : '수주중 (오프라인)'"></span>
+                            <span x-text="d.result_type === 'cancel_match_delivered' ? '취소 · 보전 후보' : d.result_type === 'cancel_match_pending' ? '취소 · 납기대기' : '수주중 (오프라인)'"></span>
                           </div>
                           <div class="text-gray-700" x-text="d.offline_store"></div>
-                          <div class="text-gray-500" x-text="d.offline_date"></div>
+                          <div class="text-gray-500">
+                            <span x-text="'수주 ' + d.offline_date"></span>
+                            <template x-if="d.offline_delivery_date">
+                              <span x-text="' · 납기 ' + d.offline_delivery_date" class="text-gray-400"></span>
+                            </template>
+                          </div>
                           <div class="font-medium" x-text="d.offline_amount > 0 ? '₩' + d.offline_amount.toLocaleString('ko-KR') : '-'"></div>
                           <span x-text="d.cancel_type || d.offline_status" class="text-gray-400"></span>
                         </div>
@@ -838,7 +839,12 @@
                         <div>
                           <div class="text-blue-600 font-semibold mb-0.5">온라인 수주</div>
                           <div class="text-gray-700" x-text="d.online_store"></div>
-                          <div class="text-gray-500" x-text="d.online_date"></div>
+                          <div class="text-gray-500">
+                            <span x-text="'수주 ' + d.online_date"></span>
+                            <template x-if="d.online_delivery_date">
+                              <span x-text="' · 납기 ' + d.online_delivery_date" class="text-gray-400"></span>
+                            </template>
+                          </div>
                           <div class="font-medium" x-text="d.online_amount > 0 ? '₩' + d.online_amount.toLocaleString('ko-KR') : '-'"></div>
                           <template x-if="d.result_type !== 'active_match' && d.compensation > 0">
                             <span class="text-brand font-bold"
@@ -870,104 +876,62 @@
                       </div>
                     </div>
 
-                    <!-- 품목 입력 (2차 검증) - 취소 건만 -->
+                    <!-- 품목 2차 검증 (자동 매칭) - 취소 건만 -->
                     <template x-if="d.result_type !== 'active_match'">
                       <div class="mt-2 pt-2 border-t border-gray-200">
-                        <button @click="toggleProductForm(d.id)"
-                          class="text-xs flex items-center gap-1 font-medium"
-                          :class="expandedMatch === d.id ? 'text-brand' : 'text-gray-500 hover:text-brand'">
-                          <svg class="w-3 h-3 transition-transform" :class="expandedMatch === d.id ? 'rotate-90' : ''"
-                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                          </svg>
-                          <span x-text="d.items && d.items.length > 0 ? '품목 수정 / 재검증' : '품목 입력 (2차 검증)'"></span>
-                        </button>
+                        <div class="flex items-center justify-between mb-1.5">
+                          <span class="text-xs font-medium text-gray-600">품목 2차 검증</span>
+                          <button @click="runAutoProductMatch(d.id, clusterKey(c))"
+                            class="text-xs text-brand hover:underline">자동 매칭 실행</button>
+                        </div>
 
-                        <div x-show="expandedMatch === d.id" x-cloak class="mt-2 space-y-2">
-                          <template x-if="matchInputs[d.id]">
-                            <div>
-                              <template x-for="(p, idx) in matchInputs[d.id]" :key="idx">
-                                <div class="grid grid-cols-12 gap-1.5 items-center mb-1.5">
-                                  <div class="col-span-3">
-                                    <input type="text" x-model="p.product_name" placeholder="상품명 (선택)"
-                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
-                                  </div>
-                                  <div class="col-span-3">
-                                    <select x-model="p.series"
-                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
-                                      <option value="">시리즈 선택</option>
-                                      <template x-for="s in config.series" :key="s">
-                                        <option :value="s" x-text="s"></option>
-                                      </template>
-                                    </select>
-                                  </div>
-                                  <div class="col-span-3">
-                                    <select x-model="p.category"
-                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
-                                      <option value="">품목 선택</option>
-                                      <template x-for="cat in config.categories" :key="cat">
-                                        <option :value="cat" x-text="cat"></option>
-                                      </template>
-                                    </select>
-                                  </div>
-                                  <div class="col-span-2">
-                                    <input type="number" x-model.number="p.amount" placeholder="금액"
-                                      class="border border-gray-200 rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-brand">
-                                  </div>
-                                  <div class="col-span-1 text-center">
-                                    <button @click="removeMatchProduct(d.id, idx)"
-                                      class="text-gray-300 hover:text-red-400 text-xs">✕</button>
-                                  </div>
-                                </div>
-                              </template>
-                              <div class="flex gap-2 mt-2">
-                                <button @click="addMatchProduct(d.id)"
-                                  class="text-xs text-brand hover:underline">+ 품목 추가</button>
-                                <button @click="verifyProducts(d.id)"
-                                  class="bg-brand text-white text-xs px-3 py-1 rounded hover:bg-brand-dark">검증 실행</button>
-                              </div>
-                            </div>
-                          </template>
-
-                          <!-- 검증 결과 -->
-                          <template x-if="matchVerifyResults[d.id]">
-                            <div class="mt-2 bg-white rounded p-2 border border-gray-200">
-                              <div class="flex items-center gap-2 mb-1.5">
-                                <span class="text-xs font-semibold" x-text="matchVerifyResults[d.id].message"></span>
-                                <span x-show="matchVerifyResults[d.id].compensation > 0"
-                                  class="text-brand font-bold text-xs"
-                                  x-text="'→ 보전금 ₩' + matchVerifyResults[d.id].compensation.toLocaleString('ko-KR')"></span>
-                              </div>
-                              <div class="space-y-1">
-                                <template x-for="p in matchVerifyResults[d.id].products" :key="p.series + p.category">
-                                  <div class="flex items-center gap-2 text-xs">
-                                    <span :class="p.match_status === 'approved' ? 'badge-full' : 'badge-rejected'"
-                                      x-text="p.match_status === 'approved' ? '인정' : '불인정'"></span>
-                                    <span class="text-gray-700" x-text="(p.product_name || '') + ' ' + p.series + ' ' + p.category"></span>
-                                    <span class="text-gray-400" x-show="p.amount > 0"
-                                      x-text="'₩' + p.amount.toLocaleString('ko-KR')"></span>
+                        <!-- 품목 결과 목록 -->
+                        <template x-if="d.items && d.items.length > 0">
+                          <div class="space-y-1">
+                            <template x-for="item in d.items" :key="item.id">
+                              <div class="flex items-center gap-2 text-xs py-1 px-2 rounded"
+                                :class="{
+                                  'bg-green-50 border border-green-100': item.match_status === 'approved',
+                                  'bg-yellow-50 border border-yellow-100': item.match_status === 'manual_review',
+                                  'bg-red-50 border border-red-100': item.match_status === 'rejected'
+                                }">
+                                <span class="shrink-0 font-medium w-14 text-center"
+                                  :class="{
+                                    'text-green-700': item.match_status === 'approved',
+                                    'text-yellow-700': item.match_status === 'manual_review',
+                                    'text-red-600':   item.match_status === 'rejected'
+                                  }"
+                                  x-text="item.match_status === 'approved' ? '✅ 인정' : item.match_status === 'manual_review' ? '⚠️ 검토' : '❌ 불인정'">
+                                </span>
+                                <span class="text-gray-700 flex-1 truncate"
+                                  x-text="[item.series, item.category, item.sub_product, item.sub_product2, item.sub_product3].filter(Boolean).join(' › ')">
+                                </span>
+                                <span class="text-gray-400 shrink-0" x-show="item.amount > 0"
+                                  x-text="'₩' + item.amount.toLocaleString('ko-KR')">
+                                </span>
+                                <template x-if="item.match_status === 'manual_review'">
+                                  <div class="flex gap-1 shrink-0">
+                                    <button @click="decideMatchItem(item.id, clusterKey(c), 'approved')"
+                                      class="bg-green-600 text-white text-xs px-1.5 py-0.5 rounded hover:bg-green-700">인정</button>
+                                    <button @click="decideMatchItem(item.id, clusterKey(c), 'rejected')"
+                                      class="bg-gray-200 text-gray-600 text-xs px-1.5 py-0.5 rounded hover:bg-red-100 hover:text-red-600">불인정</button>
                                   </div>
                                 </template>
                               </div>
-                            </div>
-                          </template>
-
-                          <!-- 기존 저장된 품목 -->
-                          <template x-if="!matchVerifyResults[d.id] && d.items && d.items.length > 0">
-                            <div class="mt-1 space-y-1">
-                              <div class="text-xs text-gray-500 mb-1">저장된 품목:</div>
-                              <template x-for="p in d.items" :key="p.id">
-                                <div class="flex items-center gap-2 text-xs">
-                                  <span :class="p.match_status === 'approved' ? 'badge-full' : p.match_status === 'rejected' ? 'badge-rejected' : 'badge-pending'"
-                                    x-text="{ approved:'인정', rejected:'불인정', pending:'미검증' }[p.match_status] || '미검증'"></span>
-                                  <span class="text-gray-700" x-text="(p.product_name || '') + ' ' + p.series + ' ' + p.category"></span>
-                                  <span class="text-gray-400" x-show="p.amount > 0"
-                                    x-text="'₩' + p.amount.toLocaleString('ko-KR')"></span>
-                                </div>
+                            </template>
+                            <div class="text-xs text-gray-400 pt-0.5 pl-1">
+                              <span x-text="'인정 ' + d.items.filter(i => i.match_status==='approved').length + '건'"></span>
+                              <template x-if="d.items.some(i => i.match_status==='manual_review')">
+                                <span class="text-yellow-600 ml-1"
+                                  x-text="'· 검토필요 ' + d.items.filter(i => i.match_status==='manual_review').length + '건'"></span>
                               </template>
+                              <span class="ml-1" x-text="'· 불인정 ' + d.items.filter(i => i.match_status==='rejected').length + '건'"></span>
                             </div>
-                          </template>
-                        </div>
+                          </div>
+                        </template>
+                        <template x-if="!d.items || d.items.length === 0">
+                          <div class="text-xs text-gray-400">태블로 업로드 후 자동 매칭 실행하세요.</div>
+                        </template>
                       </div>
                     </template>
                   </div>
@@ -1119,7 +1083,7 @@ function app() {
     tabs: [
       { id: 'overview',  label: '개요' },
       { id: 'events',    label: '① 행사 등록' },
-      { id: 'erp',       label: '② ERP 업로드' },
+      { id: 'erp',       label: '② 데이터 업로드' },
       { id: 'clusters',  label: '③ 매칭 결과' },
       { id: 'dashboard', label: '④ 보전 집계' },
     ],
@@ -1316,6 +1280,32 @@ function app() {
       });
     },
 
+    async uploadTableau(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      this.showToast('태블로 업로드 중... (잠시 기다려주세요)');
+      const r = await fetch('/api/tableau/upload', { method: 'POST', body: fd });
+      const data = await r.json();
+      if (r.ok) {
+        const sb = data.store_breakdown || {};
+        const cs = data.cancel_summary || {};
+        const mt = data.matching || {};
+        const msg = [
+          data.message,
+          `온라인 ${sb.online || 0}건 / 오프라인 ${sb.offline || 0}건`,
+          `보전후보 취소: ${cs.보전대상_오프라인_취소 || 0}건`,
+          `매칭: ${mt.신규_매칭건수 || 0}건 (핸드폰일치 ${mt.high_신뢰도_핸드폰일치 || 0}건 / 이름+동 ${mt.medium_신뢰도_이름동일치 || 0}건)`,
+        ].join(' | ');
+        this.showToast(msg);
+        await Promise.all([this.loadErpOrders(), this.loadErpStats(), this.loadMatches(), this.loadClusters()]);
+      } else {
+        this.showToast(data.detail || '업로드 실패', 'error');
+      }
+      event.target.value = '';
+    },
+
     async uploadErp(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -1343,36 +1333,33 @@ function app() {
 
     toggleProductForm(id) {
       this.expandedMatch = (this.expandedMatch === id) ? null : id;
-      if (!this.matchInputs[id]) {
-        this.matchInputs[id] = [{ product_name: '', series: '', category: '', amount: 0 }];
-      }
     },
-    addMatchProduct(id) {
-      if (!this.matchInputs[id]) this.matchInputs[id] = [];
-      this.matchInputs[id].push({ product_name: '', series: '', category: '', amount: 0 });
-    },
-    removeMatchProduct(id, idx) {
-      this.matchInputs[id].splice(idx, 1);
-    },
-    async verifyProducts(id) {
-      const products = this.matchInputs[id];
-      if (!products || products.length === 0) return this.showToast('품목을 입력하세요', 'error');
-      const hasEmpty = products.some(p => !p.series || !p.category);
-      if (hasEmpty) return this.showToast('시리즈와 품목을 모두 선택하세요', 'error');
+    addMatchProduct(id) {},
+    removeMatchProduct(id, idx) {},
+    async verifyProducts(id) {},
 
-      const r = await fetch(`/api/matches/${id}/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(products),
-      });
+    async reloadClusterDetail(key) {
+      const [event_id, customer, address] = key.split('__');
+      const params = new URLSearchParams({ event_id, customer, address });
+      const r = await fetch(`/api/clusters/detail?${params}`);
       const data = await r.json();
-      if (r.ok) {
-        this.matchVerifyResults[id] = data;
-        await Promise.all([this.loadMatches(), this.loadErpStats()]);
-        this.showToast(data.message);
-      } else {
-        this.showToast(data.detail || '검증 실패', 'error');
-      }
+      this.clusterDetailMap = { ...this.clusterDetailMap, [key]: data };
+    },
+
+    async runAutoProductMatch(matchId, key) {
+      const r = await fetch(`/api/matches/${matchId}/auto-product-match`, { method: 'POST' });
+      const data = await r.json();
+      this.showToast(`자동매칭: ✅인정 ${data.approved}건 · ⚠️검토 ${data.manual_review}건 · ❌불인정 ${data.rejected}건`);
+      await this.reloadClusterDetail(key);
+    },
+
+    async decideMatchItem(itemId, key, decision) {
+      await fetch(`/api/match-items/${itemId}/decide`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: decision }),
+      });
+      await this.reloadClusterDetail(key);
     },
 
     async runMatch() {

@@ -12,7 +12,7 @@ from typing import List, Optional
 from contextlib import contextmanager
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Body
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -41,10 +41,11 @@ CATEGORIES = [
     "파티션", "기타",
 ]
 
-# 온라인 채널 분류 기준
+# 온라인 채널 분류 기준 (태블로 실적대리점 기준 포함)
 ONLINE_STORES = frozenset([
     '네이버', '일룸쇼핑몰', '쿠팡', '쿠팡로켓', '엘롯데', 'LG홈스타일',
     'EB', 'AS', '온라인사업부',
+    'NC대전유성', 'NC대전유성서브',  # 태블로 데이터 온라인 실적대리점
 ])
 
 # ERP 납기완료 상태값 (시스템마다 표기 다를 수 있어 여러 값 허용)
@@ -163,16 +164,67 @@ def init_db():
                 amount REAL DEFAULT 0,
                 match_status TEXT DEFAULT 'pending'
             );
+
+            CREATE TABLE IF NOT EXISTS erp_order_lines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_no TEXT NOT NULL,
+                set_code TEXT DEFAULT '',
+                series TEXT DEFAULT '',
+                category TEXT DEFAULT '',
+                sub_product TEXT DEFAULT '',
+                sub_product2 TEXT DEFAULT '',
+                sub_product3 TEXT DEFAULT '',
+                amount REAL DEFAULT 0
+            );
         """)
-        # 기존 DB 마이그레이션: online_channel 컬럼 없으면 추가
+        # 기존 DB 마이그레이션
         cols = [r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()]
         if "online_channel" not in cols:
             conn.execute("ALTER TABLE events ADD COLUMN online_channel TEXT DEFAULT '네이버'")
         if "offline_lookback_days" not in cols:
             conn.execute("ALTER TABLE events ADD COLUMN offline_lookback_days INTEGER DEFAULT 7")
+        item_cols = [r[1] for r in conn.execute("PRAGMA table_info(match_items)").fetchall()]
+        if "sub_product" not in item_cols:
+            conn.execute("ALTER TABLE match_items ADD COLUMN sub_product TEXT DEFAULT ''")
+        if "sub_product2" not in item_cols:
+            conn.execute("ALTER TABLE match_items ADD COLUMN sub_product2 TEXT DEFAULT ''")
+        if "sub_product3" not in item_cols:
+            conn.execute("ALTER TABLE match_items ADD COLUMN sub_product3 TEXT DEFAULT ''")
 
 
 init_db()
+
+
+# ================================================================
+# 태블로 헬퍼 함수
+# ================================================================
+def parse_korean_date(v) -> str | None:
+    """'2026년 4월 15일' → '2026-04-15'"""
+    if v is None:
+        return None
+    if hasattr(v, 'strftime'):
+        return v.strftime('%Y-%m-%d')
+    s = str(v).strip()
+    m = re.match(r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일', s)
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    return s[:10] if len(s) >= 10 else None
+
+
+def extract_phone_last4_tableau(phone_str) -> str | None:
+    """'010-****-7293' → '7293'"""
+    if not phone_str:
+        return None
+    m = re.search(r'-(\d{4})$', str(phone_str).strip())
+    return m.group(1) if m else None
+
+
+def extract_customer_name_tableau(name_str) -> str:
+    """'손은정(폐기장무상)(윤)' → '손은정'"""
+    if not name_str:
+        return ""
+    m = re.match(r'^([가-힣]{2,5})', str(name_str).strip())
+    return m.group(1) if m else ""
 
 
 # ================================================================
@@ -234,31 +286,26 @@ def run_matching_engine(conn) -> dict:
         offline_order_from = (ann_date - timedelta(days=1)).isoformat()
         offline_order_to = ev["end_date"]
 
-        # 납기 조건: 행사 종료 기준 D+3개월 이내
-        cutoff_month = end_date.month + 3
+        # 납기 인정 기준: 행사 종료 기준 D+1개월 이내 온라인 납기
+        cutoff_month = end_date.month + 1
         cutoff_year = end_date.year + (cutoff_month - 1) // 12
         cutoff_month = ((cutoff_month - 1) % 12) + 1
         delivery_cutoff = end_date.replace(year=cutoff_year, month=cutoff_month).isoformat()
 
-        # 행사 기간 내 온라인 수주건 (지정 플랫폼만 인정)
+        # 행사 기간 내 온라인 수주건 (납기일 D+1개월 이내 or 미확정)
         online_orders = conn.execute("""
             SELECT * FROM erp_orders
             WHERE store_type = 'online'
-            AND store_name = ?
             AND order_date >= ?
             AND order_date <= ?
             AND customer_name != ''
             AND address_dong IS NOT NULL
-        """, (channel, ev["start_date"], ev["end_date"])).fetchall()
-
-        # 취소·보류 건은 매칭 대상 제외
-        online_orders = [
-            o for o in online_orders
-            if o["order_status"] not in ("취소",)
-        ]
+            AND order_status != '취소'
+            AND (delivery_date IS NULL OR delivery_date <= ?)
+        """, (ev["start_date"], ev["end_date"], delivery_cutoff)).fetchall()
 
         for oo in online_orders:
-            # 수주 기간(D-1 ~ 행사 마지막날) + 납기 D+3개월 이내 조건 적용
+            # 오프라인: 수주 기간(D-1 ~ 행사 마지막날) 내 취소 후보
             offline_orders = conn.execute("""
                 SELECT * FROM erp_orders
                 WHERE store_type = 'offline'
@@ -266,9 +313,8 @@ def run_matching_engine(conn) -> dict:
                 AND address_dong = ?
                 AND order_date >= ?
                 AND order_date <= ?
-                AND (delivery_date IS NULL OR delivery_date <= ?)
             """, (oo["customer_name"], oo["address_dong"],
-                  offline_order_from, offline_order_to, delivery_cutoff)).fetchall()
+                  offline_order_from, offline_order_to)).fetchall()
 
             for of in offline_orders:
                 exists = conn.execute(
@@ -282,7 +328,11 @@ def run_matching_engine(conn) -> dict:
                     of["order_status"] == "취소"
                     and of["cancel_type"] == "pure_cancel"
                 )
-                is_delivered = oo["order_status"] in DELIVERY_DONE_STATUSES
+                today_str = date.today().isoformat()
+                is_delivered = (
+                    oo["order_status"] in DELIVERY_DONE_STATUSES
+                    or bool(oo["delivery_date"] and oo["delivery_date"] <= today_str)
+                )
 
                 if is_cancel and is_delivered:
                     result_type = "cancel_match_delivered"
@@ -294,21 +344,125 @@ def run_matching_engine(conn) -> dict:
                     result_type = "active_match"
                     compensation = 0
 
-                conn.execute("""
+                # phone_last4 비교 → 신뢰도 결정
+                phone_match = bool(
+                    of["phone_last4"] and oo["phone_last4"]
+                    and of["phone_last4"] == oo["phone_last4"]
+                )
+                confidence = "high" if phone_match else "medium"
+                keys = json.dumps(
+                    ["customer_name", "address_dong", "phone_last4"] if phone_match
+                    else ["customer_name", "address_dong"]
+                )
+
+                cur2 = conn.execute("""
                     INSERT INTO matches
                     (offline_order_no, online_order_no, event_id, match_keys,
                      match_confidence, result_type, compensation)
                     VALUES (?,?,?,?,?,?,?)
                 """, (
                     of["order_no"], oo["order_no"], ev["id"],
-                    '["customer_name","address_dong"]',
-                    "medium",
-                    result_type,
-                    compensation,
+                    keys, confidence, result_type, compensation,
                 ))
+                new_match_id = cur2.lastrowid
+                auto_product_match(conn, new_match_id)
                 matched += 1
 
     return {"matched": matched}
+
+
+def auto_product_match(conn, match_id: int) -> dict:
+    """
+    erp_order_lines 기반 자동 품목 매칭 (3단계)
+    - approved   : 시리즈+품목+세부품목1,2,3 완전 일치
+    - manual_review: 시리즈+품목+세부품목1 일치, 세부품목2/3 다름
+    - rejected   : 불일치 또는 제외 규칙 적용
+    """
+    match = conn.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
+    if not match:
+        return {"approved": 0, "manual_review": 0, "rejected": 0}
+
+    offline_lines = conn.execute(
+        "SELECT * FROM erp_order_lines WHERE order_no=?",
+        (match["offline_order_no"],)
+    ).fetchall()
+    if not offline_lines:
+        return {"approved": 0, "manual_review": 0, "rejected": 0}
+
+    online_lines = conn.execute(
+        "SELECT * FROM erp_order_lines WHERE order_no=?",
+        (match["online_order_no"],)
+    ).fetchall()
+    have_online_detail = len(online_lines) > 0
+
+    if not have_online_detail and match["event_id"]:
+        event_prods = conn.execute(
+            "SELECT series, category FROM event_products WHERE event_id=?",
+            (match["event_id"],)
+        ).fetchall()
+        compare_list = [
+            {"series": ep["series"], "category": ep["category"],
+             "sub_product": None, "sub_product2": None, "sub_product3": None}
+            for ep in event_prods
+        ]
+    else:
+        compare_list = [dict(ol) for ol in online_lines]
+
+    if not compare_list:
+        return {"approved": 0, "manual_review": 0, "rejected": 0}
+
+    conn.execute("DELETE FROM match_items WHERE match_id=?", (match_id,))
+
+    approved_amount = 0
+    cnt = {"approved": 0, "manual_review": 0, "rejected": 0}
+
+    for ol in offline_lines:
+        best = "rejected"
+        for comp in compare_list:
+            ol_series = ol["series"] or ""
+            cp_series = comp.get("series") or ""
+            if cp_series in EXCLUSION_RULES.get(ol_series, []):
+                continue
+            if ol_series in EXCLUSION_RULES.get(cp_series, []):
+                continue
+            if ol_series != cp_series:
+                continue
+            if (ol["category"] or "") != (comp.get("category") or ""):
+                continue
+            # 시리즈+품목 일치
+            if not have_online_detail:
+                best = "manual_review"
+                break
+            s1 = (ol["sub_product"] or "") == (comp.get("sub_product") or "")
+            s2 = (ol["sub_product2"] or "") == (comp.get("sub_product2") or "")
+            s3 = (ol["sub_product3"] or "") == (comp.get("sub_product3") or "")
+            if s1 and s2 and s3:
+                best = "approved"
+                break
+            elif s1 and best != "approved":
+                best = "manual_review"
+
+        cnt[best] += 1
+        if best == "approved":
+            approved_amount += ol["amount"] or 0
+
+        conn.execute("""
+            INSERT INTO match_items
+            (match_id, product_name, series, category, sub_product, sub_product2, sub_product3, amount, match_status)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (match_id,
+              ol["sub_product"] or "",
+              ol["series"] or "",
+              ol["category"] or "",
+              ol["sub_product"] or "",
+              ol["sub_product2"] or "",
+              ol["sub_product3"] or "",
+              ol["amount"] or 0,
+              best))
+
+    compensation = round(approved_amount * 0.05, 0)
+    conn.execute("UPDATE matches SET compensation=? WHERE id=?", (compensation, match_id))
+    return cnt
 
 
 def refresh_delivery_status(conn) -> int:
@@ -326,12 +480,18 @@ def refresh_delivery_status(conn) -> int:
           AND m.status = 'pending'
     """).fetchall()
 
+    today = date.today().isoformat()
     for pm in pending_matches:
         online = conn.execute(
-            "SELECT order_status FROM erp_orders WHERE order_no=?",
+            "SELECT order_status, delivery_date FROM erp_orders WHERE order_no=?",
             (pm["online_order_no"],)
         ).fetchone()
-        if online and online["order_status"] in DELIVERY_DONE_STATUSES:
+        if not online:
+            continue
+        # 납기완료 상태 OR 확정납기일이 오늘 이전이면 납기 완료로 처리
+        status_done = online["order_status"] in DELIVERY_DONE_STATUSES
+        date_passed = bool(online["delivery_date"] and online["delivery_date"] <= today)
+        if status_done or date_passed:
             compensation = round((pm["amount"] or 0) * 0.05, 0)
             conn.execute("""
                 UPDATE matches
@@ -903,6 +1063,143 @@ async def export_orders():
 
 
 # ================================================================
+# 태블로 수주 API
+# ================================================================
+@app.post("/api/tableau/upload")
+async def upload_tableau(file: UploadFile = File(...)):
+    """태블로 엑셀 업로드 → 수주번호 기준 집계 → 자동 매칭"""
+    import openpyxl
+    content = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    ws = wb.active
+
+    headers = [str(c.value).strip() if c.value is not None else '' for c in ws[1]]
+
+    required = ['수주번호', '수주건명', '수주상태', '실적대리점', '주문일자일', '동', '핸드폰번호']
+    missing = [h for h in required if h not in headers]
+    if missing:
+        raise HTTPException(400, f"필수 컬럼 없음: {missing}\n실제 컬럼: {headers}")
+
+    def ci(name):
+        try: return headers.index(name)
+        except ValueError: return None
+
+    i_no = ci('수주번호')
+    i_name = ci('수주건명')
+    i_status = ci('수주상태')
+    i_store = ci('실적대리점')
+    i_date = ci('주문일자일')
+    i_delivery = ci('확정납기일')
+    i_dong = ci('동')
+    i_phone = ci('핸드폰번호')
+    i_setcode = ci('세트코드')
+    i_series = ci('시리즈')
+    i_category = ci('품목')
+    i_sub1 = ci('세부품목')
+    i_sub2 = ci('세부품목2')
+    i_sub3 = ci('세부품목3')
+    i_amount = len(headers) - 1  # 빈 헤더 마지막 컬럼 = 금액
+
+    orders_map: dict[str, dict] = {}
+    products_map: dict[str, list] = {}
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        order_no = str(row[i_no]).strip() if row[i_no] else ''
+        if not order_no or order_no == 'None':
+            continue
+
+        store = str(row[i_store]).strip() if row[i_store] else ''
+        store_type = 'online' if store in ONLINE_STORES else 'offline'
+
+        if order_no not in orders_map:
+            base, seq = parse_order_no(order_no)
+            orders_map[order_no] = {
+                'order_no': order_no,
+                'order_base': base,
+                'order_seq': seq,
+                'store_name': store,
+                'store_type': store_type,
+                'order_status': str(row[i_status]).strip() if row[i_status] else '',
+                'customer_name': extract_customer_name_tableau(row[i_name]),
+                'order_date': parse_korean_date(row[i_date]),
+                'delivery_date': parse_korean_date(row[i_delivery]) if i_delivery is not None else None,
+                'address_dong': str(row[i_dong]).strip() if row[i_dong] else None,
+                'phone_last4': extract_phone_last4_tableau(row[i_phone]) if i_phone is not None else None,
+                'amount': 0,
+            }
+            products_map[order_no] = []
+
+        amt = float(row[i_amount]) if (i_amount < len(row) and row[i_amount]) else 0.0
+        orders_map[order_no]['amount'] += amt
+
+        series = str(row[i_series]).strip() if (i_series is not None and row[i_series]) else ''
+        category = str(row[i_category]).strip() if (i_category is not None and row[i_category]) else ''
+        if series or category:
+            products_map[order_no].append({
+                'set_code': str(row[i_setcode]).strip() if (i_setcode is not None and row[i_setcode]) else '',
+                'series': series,
+                'category': category,
+                'sub1': str(row[i_sub1]).strip() if (i_sub1 is not None and row[i_sub1]) else '',
+                'sub2': str(row[i_sub2]).strip() if (i_sub2 is not None and row[i_sub2]) else '',
+                'sub3': str(row[i_sub3]).strip() if (i_sub3 is not None and row[i_sub3]) else '',
+                'amount': amt,
+            })
+
+    inserted = skipped = 0
+    with get_db() as conn:
+        for order in orders_map.values():
+            try:
+                conn.execute("""
+                    INSERT OR REPLACE INTO erp_orders
+                    (order_no, order_base, order_seq, store_name, store_type, order_status,
+                     customer_name, order_date, delivery_date, amount, address_dong, phone_last4)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    order['order_no'], order['order_base'], order['order_seq'],
+                    order['store_name'], order['store_type'], order['order_status'],
+                    order['customer_name'], order['order_date'], order['delivery_date'],
+                    order['amount'], order['address_dong'], order['phone_last4'],
+                ))
+                conn.execute("DELETE FROM erp_order_lines WHERE order_no=?", (order['order_no'],))
+                for p in products_map[order['order_no']]:
+                    conn.execute("""
+                        INSERT INTO erp_order_lines
+                        (order_no, set_code, series, category, sub_product, sub_product2, sub_product3, amount)
+                        VALUES (?,?,?,?,?,?,?,?)
+                    """, (order['order_no'], p['set_code'], p['series'], p['category'],
+                          p['sub1'], p['sub2'], p['sub3'], p['amount']))
+                inserted += 1
+            except Exception:
+                skipped += 1
+
+        classify_cancel_types(conn)
+        match_result = run_matching_engine(conn)
+        delivery_updated = refresh_delivery_status(conn)
+
+        total_online = conn.execute("SELECT COUNT(*) as c FROM erp_orders WHERE store_type='online'").fetchone()["c"]
+        total_offline = conn.execute("SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline'").fetchone()["c"]
+        pure_cancel_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline' AND cancel_type='pure_cancel'"
+        ).fetchone()["c"]
+        high_conf = conn.execute("SELECT COUNT(*) as c FROM matches WHERE match_confidence='high'").fetchone()["c"]
+        med_conf = conn.execute("SELECT COUNT(*) as c FROM matches WHERE match_confidence='medium'").fetchone()["c"]
+
+    return {
+        "message": f"{inserted}건 업로드 완료 (건너뜀 {skipped}건)",
+        "uploaded": inserted,
+        "skipped": skipped,
+        "store_breakdown": {"online": total_online, "offline": total_offline},
+        "cancel_summary": {"보전대상_오프라인_취소": pure_cancel_cnt},
+        "matching": {
+            "신규_매칭건수": match_result["matched"],
+            "납기완료_업데이트": delivery_updated,
+            "high_신뢰도_핸드폰일치": high_conf,
+            "medium_신뢰도_이름동일치": med_conf,
+        }
+    }
+
+
+# ================================================================
 # ERP 수주 API
 # ================================================================
 @app.post("/api/erp/upload")
@@ -1176,16 +1473,18 @@ async def cluster_detail(event_id: int, customer: str, address: str):
         rows = conn.execute("""
             SELECT
                 m.id, m.result_type, m.compensation, m.match_confidence, m.status,
-                of.order_no   AS offline_order_no,
-                of.store_name AS offline_store,
-                of.order_date AS offline_date,
-                of.amount     AS offline_amount,
-                of.order_status AS offline_status,
+                of.order_no       AS offline_order_no,
+                of.store_name     AS offline_store,
+                of.order_date     AS offline_date,
+                of.delivery_date  AS offline_delivery_date,
+                of.amount         AS offline_amount,
+                of.order_status   AS offline_status,
                 of.cancel_type,
-                on_.order_no   AS online_order_no,
-                on_.store_name AS online_store,
-                on_.order_date AS online_date,
-                on_.amount     AS online_amount,
+                on_.order_no      AS online_order_no,
+                on_.store_name    AS online_store,
+                on_.order_date    AS online_date,
+                on_.delivery_date AS online_delivery_date,
+                on_.amount        AS online_amount,
                 e.event_name
             FROM matches m
             JOIN erp_orders of  ON m.offline_order_no = of.order_no
@@ -1260,6 +1559,31 @@ async def verify_match_products(match_id: int, products: List[MatchProductIn]):
         "products": matched,
         "message": label.get(result_type, "-"),
     }
+
+
+@app.post("/api/matches/{match_id}/auto-product-match")
+async def trigger_auto_product_match(match_id: int):
+    with get_db() as conn:
+        cnt = auto_product_match(conn, match_id)
+    return {"approved": cnt["approved"], "manual_review": cnt["manual_review"], "rejected": cnt["rejected"]}
+
+
+@app.patch("/api/match-items/{item_id}/decide")
+async def decide_match_item(item_id: int, body: dict = Body(...)):
+    decision = body.get("status")
+    if decision not in ("approved", "rejected"):
+        raise HTTPException(400, "status must be 'approved' or 'rejected'")
+    with get_db() as conn:
+        conn.execute("UPDATE match_items SET match_status=? WHERE id=?", (decision, item_id))
+        row = conn.execute("SELECT match_id FROM match_items WHERE id=?", (item_id,)).fetchone()
+        if row:
+            approved_amount = conn.execute(
+                "SELECT COALESCE(SUM(amount),0) as s FROM match_items WHERE match_id=? AND match_status='approved'",
+                (row["match_id"],)
+            ).fetchone()["s"]
+            conn.execute("UPDATE matches SET compensation=? WHERE id=?",
+                         (round(approved_amount * 0.05, 0), row["match_id"]))
+    return {"ok": True}
 
 
 @app.patch("/api/matches/{match_id}")
