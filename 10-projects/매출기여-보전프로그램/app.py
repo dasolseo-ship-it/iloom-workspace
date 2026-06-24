@@ -45,7 +45,8 @@ CATEGORIES = [
 ONLINE_STORES = frozenset([
     '네이버', '일룸쇼핑몰', '쿠팡', '쿠팡로켓', '엘롯데', 'LG홈스타일',
     'EB', 'AS', '온라인사업부',
-    'NC대전유성', 'NC대전유성서브',  # 태블로 데이터 온라인 실적대리점
+    'NC대전유성', 'NC대전유성서브',
+    '오늘의 집', '오늘의집', '29CM', '에스에스지', '씨제이몰', '더현대닷컴',
 ])
 
 # ERP 납기완료 상태값 (시스템마다 표기 다를 수 있어 여러 값 허용)
@@ -176,6 +177,13 @@ def init_db():
                 sub_product3 TEXT DEFAULT '',
                 amount REAL DEFAULT 0
             );
+
+            CREATE INDEX IF NOT EXISTS idx_erp_store_type   ON erp_orders(store_type);
+            CREATE INDEX IF NOT EXISTS idx_erp_customer_dong ON erp_orders(customer_name, address_dong);
+            CREATE INDEX IF NOT EXISTS idx_erp_order_date   ON erp_orders(order_date);
+            CREATE INDEX IF NOT EXISTS idx_erp_cancel_type  ON erp_orders(cancel_type);
+            CREATE INDEX IF NOT EXISTS idx_matches_event    ON matches(event_id);
+            CREATE INDEX IF NOT EXISTS idx_lines_order_no   ON erp_order_lines(order_no);
         """)
         # 기존 DB 마이그레이션
         cols = [r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()]
@@ -190,6 +198,11 @@ def init_db():
             conn.execute("ALTER TABLE match_items ADD COLUMN sub_product2 TEXT DEFAULT ''")
         if "sub_product3" not in item_cols:
             conn.execute("ALTER TABLE match_items ADD COLUMN sub_product3 TEXT DEFAULT ''")
+        # matches 테이블 UNIQUE 인덱스 (중복 방지)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_pair
+            ON matches(offline_order_no, online_order_no)
+        """)
 
 
 init_db()
@@ -268,107 +281,105 @@ def classify_cancel_types(conn):
 
 def run_matching_engine(conn) -> dict:
     """
-    온라인 수주 기준 역방향 매칭 + 납기완료 기준 보전금 확정
-    result_type 3단계:
-      cancel_match_delivered  : 오프라인 취소 + 온라인 납기완료 → 보전 확정 (5% 계산)
-      cancel_match_pending    : 오프라인 취소 + 온라인 수주중   → 보전 대기 (납기완료 후 업데이트)
-      active_match            : 오프라인 수주중 + 온라인 수주   → 참고용 클러스터
+    단일 JOIN으로 후보 추출 → 배치 INSERT (N+1 제거)
+    result_type:
+      cancel_match_delivered : 오프라인 취소 + 온라인 납기완료 → 보전 확정
+      cancel_match_pending   : 오프라인 취소 + 온라인 수주중   → 보전 대기
+      active_match           : 오프라인 수주중 + 온라인 수주   → 참고
     """
     events = conn.execute("SELECT * FROM events ORDER BY announcement_date").fetchall()
-    matched = 0
+    total_matched = 0
+    today_str = date.today().isoformat()
 
     for ev in events:
-        channel = ev["online_channel"] if ev["online_channel"] else "네이버"
         ann_date = date.fromisoformat(ev["announcement_date"])
         end_date = date.fromisoformat(ev["end_date"])
+        offline_from = (ann_date - timedelta(days=1)).isoformat()
 
-        # 수주 기간: 공지 전날(D-1) ~ 행사 마지막날
-        offline_order_from = (ann_date - timedelta(days=1)).isoformat()
-        offline_order_to = ev["end_date"]
+        cutoff_m = end_date.month + 1
+        cutoff_y = end_date.year + (cutoff_m - 1) // 12
+        cutoff_m = ((cutoff_m - 1) % 12) + 1
+        delivery_cutoff = end_date.replace(year=cutoff_y, month=cutoff_m).isoformat()
 
-        # 납기 인정 기준: 행사 종료 기준 D+1개월 이내 온라인 납기
-        cutoff_month = end_date.month + 1
-        cutoff_year = end_date.year + (cutoff_month - 1) // 12
-        cutoff_month = ((cutoff_month - 1) % 12) + 1
-        delivery_cutoff = end_date.replace(year=cutoff_year, month=cutoff_month).isoformat()
+        # 단일 JOIN: customer_name + address_dong 기준 후보 쌍 전부 추출
+        candidates = conn.execute("""
+            SELECT
+                off.order_no    AS off_no,
+                off.order_status AS off_status,
+                off.cancel_type,
+                off.amount      AS off_amount,
+                off.phone_last4  AS off_phone,
+                on_.order_no    AS on_no,
+                on_.order_status AS on_status,
+                on_.delivery_date AS on_delivery,
+                on_.phone_last4  AS on_phone
+            FROM erp_orders on_
+            JOIN erp_orders off
+              ON  off.customer_name = on_.customer_name
+              AND off.address_dong  = on_.address_dong
+              AND off.store_type    = 'offline'
+              AND off.order_date   >= ?
+              AND off.order_date   <= ?
+            WHERE on_.store_type   = 'online'
+              AND on_.order_date   >= ?
+              AND on_.order_date   <= ?
+              AND on_.customer_name != ''
+              AND on_.address_dong  IS NOT NULL
+              AND on_.order_status  != '취소'
+              AND (on_.delivery_date IS NULL OR on_.delivery_date <= ?)
+        """, (offline_from, ev["end_date"],
+              ev["start_date"], ev["end_date"],
+              delivery_cutoff)).fetchall()
 
-        # 행사 기간 내 온라인 수주건 (납기일 D+1개월 이내 or 미확정)
-        online_orders = conn.execute("""
-            SELECT * FROM erp_orders
-            WHERE store_type = 'online'
-            AND order_date >= ?
-            AND order_date <= ?
-            AND customer_name != ''
-            AND address_dong IS NOT NULL
-            AND order_status != '취소'
-            AND (delivery_date IS NULL OR delivery_date <= ?)
-        """, (ev["start_date"], ev["end_date"], delivery_cutoff)).fetchall()
+        # 중복 제거: 이미 등록된 매칭 키 세트
+        existing = set(
+            r[0] for r in conn.execute(
+                "SELECT offline_order_no||'|'||online_order_no FROM matches WHERE event_id=?",
+                (ev["id"],)
+            ).fetchall()
+        )
 
-        for oo in online_orders:
-            # 오프라인: 수주 기간(D-1 ~ 행사 마지막날) 내 취소 후보
-            offline_orders = conn.execute("""
-                SELECT * FROM erp_orders
-                WHERE store_type = 'offline'
-                AND customer_name = ?
-                AND address_dong = ?
-                AND order_date >= ?
-                AND order_date <= ?
-            """, (oo["customer_name"], oo["address_dong"],
-                  offline_order_from, offline_order_to)).fetchall()
+        new_matches = []
+        for c in candidates:
+            key = c["off_no"] + "|" + c["on_no"]
+            if key in existing:
+                continue
+            existing.add(key)
 
-            for of in offline_orders:
-                exists = conn.execute(
-                    "SELECT 1 FROM matches WHERE offline_order_no=? AND online_order_no=?",
-                    (of["order_no"], oo["order_no"])
-                ).fetchone()
-                if exists:
-                    continue
+            is_cancel = (c["off_status"] == "취소" and c["cancel_type"] == "pure_cancel")
+            is_delivered = (
+                c["on_status"] in DELIVERY_DONE_STATUSES
+                or bool(c["on_delivery"] and c["on_delivery"] <= today_str)
+            )
 
-                is_cancel = (
-                    of["order_status"] == "취소"
-                    and of["cancel_type"] == "pure_cancel"
-                )
-                today_str = date.today().isoformat()
-                is_delivered = (
-                    oo["order_status"] in DELIVERY_DONE_STATUSES
-                    or bool(oo["delivery_date"] and oo["delivery_date"] <= today_str)
-                )
+            if is_cancel and is_delivered:
+                result_type = "cancel_match_delivered"
+                compensation = round((c["off_amount"] or 0) * 0.05, 0)
+            elif is_cancel:
+                result_type = "cancel_match_pending"
+                compensation = 0
+            else:
+                result_type = "active_match"
+                compensation = 0
 
-                if is_cancel and is_delivered:
-                    result_type = "cancel_match_delivered"
-                    compensation = round((of["amount"] or 0) * 0.05, 0)
-                elif is_cancel:
-                    result_type = "cancel_match_pending"
-                    compensation = 0
-                else:
-                    result_type = "active_match"
-                    compensation = 0
+            phone_match = bool(c["off_phone"] and c["on_phone"] and c["off_phone"] == c["on_phone"])
+            confidence = "high" if phone_match else "medium"
+            keys = json.dumps(
+                ["customer_name", "address_dong", "phone_last4"] if phone_match
+                else ["customer_name", "address_dong"]
+            )
+            new_matches.append((c["off_no"], c["on_no"], ev["id"], keys, confidence, result_type, compensation))
 
-                # phone_last4 비교 → 신뢰도 결정
-                phone_match = bool(
-                    of["phone_last4"] and oo["phone_last4"]
-                    and of["phone_last4"] == oo["phone_last4"]
-                )
-                confidence = "high" if phone_match else "medium"
-                keys = json.dumps(
-                    ["customer_name", "address_dong", "phone_last4"] if phone_match
-                    else ["customer_name", "address_dong"]
-                )
+        if new_matches:
+            conn.executemany("""
+                INSERT OR IGNORE INTO matches
+                (offline_order_no, online_order_no, event_id, match_keys,
+                 match_confidence, result_type, compensation)
+                VALUES (?,?,?,?,?,?,?)
+            """, new_matches)
+            total_matched += len(new_matches)
 
-                cur2 = conn.execute("""
-                    INSERT INTO matches
-                    (offline_order_no, online_order_no, event_id, match_keys,
-                     match_confidence, result_type, compensation)
-                    VALUES (?,?,?,?,?,?,?)
-                """, (
-                    of["order_no"], oo["order_no"], ev["id"],
-                    keys, confidence, result_type, compensation,
-                ))
-                new_match_id = cur2.lastrowid
-                auto_product_match(conn, new_match_id)
-                matched += 1
-
-    return {"matched": matched}
+    return {"matched": total_matched}
 
 
 def auto_product_match(conn, match_id: int) -> dict:
@@ -1070,10 +1081,11 @@ async def upload_tableau(file: UploadFile = File(...)):
     """태블로 엑셀 업로드 → 수주번호 기준 집계 → 자동 매칭"""
     import openpyxl
     content = await file.read()
-    wb = openpyxl.load_workbook(io.BytesIO(content))
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
     ws = wb.active
 
-    headers = [str(c.value).strip() if c.value is not None else '' for c in ws[1]]
+    headers_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+    headers = [str(c).strip() if c is not None else '' for c in headers_row]
 
     required = ['수주번호', '수주건명', '수주상태', '실적대리점', '주문일자일', '동', '핸드폰번호']
     missing = [h for h in required if h not in headers]
@@ -1103,7 +1115,7 @@ async def upload_tableau(file: UploadFile = File(...)):
     orders_map: dict[str, dict] = {}
     products_map: dict[str, list] = {}
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
+    for row in ws.iter_rows(min_row=2, values_only=True):  # read_only 스트리밍
         order_no = str(row[i_no]).strip() if row[i_no] else ''
         if not order_no or order_no == 'None':
             continue
@@ -1145,32 +1157,40 @@ async def upload_tableau(file: UploadFile = File(...)):
                 'amount': amt,
             })
 
+    wb.close()
     inserted = skipped = 0
     with get_db() as conn:
+        order_rows = []
+        line_rows = []
+        order_nos = []
         for order in orders_map.values():
-            try:
-                conn.execute("""
-                    INSERT OR REPLACE INTO erp_orders
-                    (order_no, order_base, order_seq, store_name, store_type, order_status,
-                     customer_name, order_date, delivery_date, amount, address_dong, phone_last4)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-                """, (
-                    order['order_no'], order['order_base'], order['order_seq'],
-                    order['store_name'], order['store_type'], order['order_status'],
-                    order['customer_name'], order['order_date'], order['delivery_date'],
-                    order['amount'], order['address_dong'], order['phone_last4'],
-                ))
-                conn.execute("DELETE FROM erp_order_lines WHERE order_no=?", (order['order_no'],))
-                for p in products_map[order['order_no']]:
-                    conn.execute("""
-                        INSERT INTO erp_order_lines
-                        (order_no, set_code, series, category, sub_product, sub_product2, sub_product3, amount)
-                        VALUES (?,?,?,?,?,?,?,?)
-                    """, (order['order_no'], p['set_code'], p['series'], p['category'],
-                          p['sub1'], p['sub2'], p['sub3'], p['amount']))
-                inserted += 1
-            except Exception:
-                skipped += 1
+            order_rows.append((
+                order['order_no'], order['order_base'], order['order_seq'],
+                order['store_name'], order['store_type'], order['order_status'],
+                order['customer_name'], order['order_date'], order['delivery_date'],
+                order['amount'], order['address_dong'], order['phone_last4'],
+            ))
+            order_nos.append(order['order_no'])
+            for p in products_map[order['order_no']]:
+                line_rows.append((order['order_no'], p['set_code'], p['series'], p['category'],
+                                  p['sub1'], p['sub2'], p['sub3'], p['amount']))
+        conn.executemany("""
+            INSERT OR REPLACE INTO erp_orders
+            (order_no, order_base, order_seq, store_name, store_type, order_status,
+             customer_name, order_date, delivery_date, amount, address_dong, phone_last4)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, order_rows)
+        # SQLite 변수 999개 제한 → 청크 처리
+        chunk = 900
+        for i in range(0, len(order_nos), chunk):
+            batch = order_nos[i:i+chunk]
+            conn.execute(f"DELETE FROM erp_order_lines WHERE order_no IN ({','.join(['?']*len(batch))})", batch)
+        conn.executemany("""
+            INSERT INTO erp_order_lines
+            (order_no, set_code, series, category, sub_product, sub_product2, sub_product3, amount)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, line_rows)
+        inserted = len(order_rows)
 
         classify_cancel_types(conn)
         match_result = run_matching_engine(conn)
@@ -1647,6 +1667,174 @@ async def create_manual_match(body: ManualMatchIn):
 
     label = {"cancel_match_delivered": "✅ 보전 확정", "cancel_match_pending": "⏳ 보전 대기", "active_match": "모니터링"}
     return {"message": f"수기 매칭 등록 완료 — {label.get(result_type, result_type)}"}
+
+
+@app.get("/api/events/{event_id}/stats")
+async def event_stats(event_id: int):
+    with get_db() as conn:
+        s = conn.execute("""
+            SELECT
+                COUNT(*) as total_matches,
+                SUM(CASE WHEN result_type='cancel_match_delivered' THEN 1 ELSE 0 END) as confirmed_cnt,
+                SUM(CASE WHEN result_type='cancel_match_pending'   THEN 1 ELSE 0 END) as pending_cnt,
+                SUM(CASE WHEN result_type='active_match'           THEN 1 ELSE 0 END) as active_cnt,
+                SUM(CASE WHEN status='pending' AND result_type != 'active_match' THEN 1 ELSE 0 END) as pending_review_cnt,
+                SUM(CASE WHEN result_type='cancel_match_delivered' THEN compensation ELSE 0 END) as expected_compensation,
+                SUM(CASE WHEN status='approved' THEN compensation ELSE 0 END) as approved_compensation
+            FROM matches WHERE event_id=?
+        """, (event_id,)).fetchone()
+        cancel_cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline' AND cancel_type='pure_cancel'"
+        ).fetchone()["c"]
+    return {**dict(s), "offline_cancel_cnt": cancel_cnt}
+
+
+@app.get("/api/events/{event_id}/store-stats")
+async def event_store_stats(event_id: int):
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                off.store_name,
+                COUNT(*) as total,
+                SUM(CASE WHEN m.status='approved' THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN m.status='rejected' THEN 1 ELSE 0 END) as rejected_cnt,
+                SUM(CASE WHEN m.result_type='cancel_match_pending' THEN 1 ELSE 0 END) as pending_cnt,
+                SUM(CASE WHEN m.result_type='cancel_match_delivered' THEN m.compensation ELSE 0 END) as expected_compensation,
+                SUM(CASE WHEN m.status='approved' THEN m.compensation ELSE 0 END) as total_compensation
+            FROM matches m
+            JOIN erp_orders off ON m.offline_order_no = off.order_no
+            WHERE m.event_id=? AND m.result_type != 'active_match'
+            GROUP BY off.store_name
+            ORDER BY expected_compensation DESC
+        """, (event_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/events/{event_id}/export")
+async def export_event(event_id: int):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    BRAND_RED = "C80A1E"
+    thin = Side(style="thin", color="DDDDDD")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def hstyle(cell):
+        cell.font = Font(name="맑은 고딕", bold=True, color="FFFFFF", size=10)
+        cell.fill = PatternFill("solid", fgColor=BRAND_RED)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    def dstyle(cell, bold=False, color=None, align="left"):
+        cell.font = Font(name="맑은 고딕", bold=bold, size=9)
+        if color:
+            cell.fill = PatternFill("solid", fgColor=color)
+        cell.alignment = Alignment(horizontal=align, vertical="center")
+        cell.border = border
+
+    with get_db() as conn:
+        ev = conn.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
+        if not ev:
+            raise HTTPException(404, "행사를 찾을 수 없습니다")
+
+        rows = conn.execute("""
+            SELECT
+                off.store_name, off.customer_name, off.address_dong,
+                off.order_date AS offline_date, off.amount AS offline_amount,
+                on_.order_date AS online_date, on_.amount AS online_amount,
+                on_.store_name AS online_store,
+                m.match_confidence, m.result_type, m.compensation, m.status,
+                e.event_name
+            FROM matches m
+            JOIN erp_orders off ON m.offline_order_no = off.order_no
+            JOIN erp_orders on_ ON m.online_order_no  = on_.order_no
+            LEFT JOIN events e  ON m.event_id = e.id
+            WHERE m.event_id=? AND m.result_type != 'active_match'
+            ORDER BY off.store_name, m.result_type DESC
+        """, (event_id,)).fetchall()
+
+        store_stats = conn.execute("""
+            SELECT
+                off.store_name,
+                COUNT(*) as total,
+                SUM(CASE WHEN m.status='approved' THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN m.result_type='cancel_match_delivered' THEN m.compensation ELSE 0 END) as expected_compensation,
+                SUM(CASE WHEN m.status='approved' THEN m.compensation ELSE 0 END) as total_compensation
+            FROM matches m
+            JOIN erp_orders off ON m.offline_order_no = off.order_no
+            WHERE m.event_id=? AND m.result_type != 'active_match'
+            GROUP BY off.store_name ORDER BY expected_compensation DESC
+        """, (event_id,)).fetchall()
+
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = "보전금_상세"
+    ws1.sheet_view.showGridLines = False
+    ws1.freeze_panes = "A2"
+
+    h1 = ["No", "매장명", "고객명", "동주소", "오프라인 수주일", "오프라인 금액", "온라인 수주일", "온라인 금액", "신뢰도", "결과", "보전금(원)", "처리상태"]
+    cw1 = [5, 14, 10, 12, 14, 14, 14, 14, 10, 10, 14, 10]
+    ws1.row_dimensions[1].height = 22
+    for col, (h, w) in enumerate(zip(h1, cw1), 1):
+        hstyle(ws1.cell(1, col, h))
+        ws1.column_dimensions[get_column_letter(col)].width = w
+
+    rt_label = {"cancel_match_delivered": "보전확정", "cancel_match_pending": "납기대기"}
+    st_label = {"approved": "승인", "rejected": "반려", "pending": "검토중"}
+    conf_label = {"high": "HIGH", "medium": "MEDIUM", "manual": "수기"}
+    LIGHT = "F5F5F5"
+
+    for i, r in enumerate(rows, 1):
+        row = i + 1
+        ws1.row_dimensions[row].height = 18
+        bg = LIGHT if i % 2 == 0 else "FFFFFF"
+        vals = [
+            i, r["store_name"], r["customer_name"], r["address_dong"] or "-",
+            r["offline_date"], r["offline_amount"] or 0,
+            r["online_date"], r["online_amount"] or 0,
+            conf_label.get(r["match_confidence"], "-"),
+            rt_label.get(r["result_type"], "-"),
+            r["compensation"] or 0,
+            st_label.get(r["status"], "-"),
+        ]
+        for col, val in enumerate(vals, 1):
+            cell = ws1.cell(row, col, val)
+            is_amt = col in (6, 8, 11)
+            dstyle(cell, color=bg, align="right" if is_amt else ("center" if col in (1, 9, 10, 12) else "left"))
+            if is_amt:
+                cell.number_format = '#,##0'
+                cell.fill = PatternFill("solid", fgColor=bg)
+
+    ws2 = wb.create_sheet("매장별집계")
+    ws2.sheet_view.showGridLines = False
+    h2 = ["매장명", "전체건수", "승인건수", "보전 예정액(원)", "확정 보전금(원)"]
+    cw2 = [16, 12, 12, 18, 18]
+    ws2.row_dimensions[1].height = 22
+    for col, (h, w) in enumerate(zip(h2, cw2), 1):
+        hstyle(ws2.cell(1, col, h))
+        ws2.column_dimensions[get_column_letter(col)].width = w
+
+    for i, s in enumerate(store_stats, 1):
+        row = i + 1
+        bg = LIGHT if i % 2 == 0 else "FFFFFF"
+        vals = [s["store_name"], s["total"], s["approved_cnt"], s["expected_compensation"] or 0, s["total_compensation"] or 0]
+        for col, val in enumerate(vals, 1):
+            cell = ws2.cell(row, col, val)
+            dstyle(cell, color=bg, align="right" if col >= 4 else ("center" if col > 1 else "left"))
+            if col >= 4:
+                cell.number_format = '#,##0'
+                cell.fill = PatternFill("solid", fgColor=bg)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from urllib.parse import quote
+    event_name = ev["event_name"]
+    fname = quote(f"iloom_보전금_{event_name}_{date.today().strftime('%Y%m%d')}.xlsx", safe="")
+    return StreamingResponse(buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{fname}"})
 
 
 if __name__ == "__main__":
