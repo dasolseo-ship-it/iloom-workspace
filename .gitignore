@@ -2,6 +2,8 @@
 *.env
 00-system/credentials.json
 00-system/token.json
+00-system/02-scripts/service_account.json
+.claude/skills/수불업데이트/scripts/.token_subul.json
 .claude/settings.local.json
 __pycache__/
 *.pyc
