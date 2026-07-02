@@ -217,8 +217,7 @@
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
         <h3 class="font-semibold text-sm text-gray-700">업로드된 수주 데이터</h3>
         <div class="flex gap-1 text-xs">
-          <button @click="erpFilter='pure_cancel'; loadErpOrders()" :class="erpFilter==='pure_cancel'?'bg-red-50 text-red-600 font-semibold':'text-gray-400'" class="px-2 py-1 rounded">순수취소</button>
-          <button @click="erpFilter='date_change'; loadErpOrders()" :class="erpFilter==='date_change'?'bg-yellow-50 text-yellow-600 font-semibold':'text-gray-400'" class="px-2 py-1 rounded">납기변경</button>
+          <button @click="erpFilter='pure_cancel'; loadErpOrders()" :class="erpFilter==='pure_cancel'?'bg-red-50 text-red-600 font-semibold':'text-gray-400'" class="px-2 py-1 rounded">취소</button>
           <button @click="erpFilter=''; loadErpOrders()" :class="erpFilter===''?'bg-gray-100 text-gray-700 font-semibold':'text-gray-400'" class="px-2 py-1 rounded">전체</button>
         </div>
       </div>
@@ -242,8 +241,8 @@
                 <td class="px-4 py-2 text-center text-xs text-gray-400" x-text="o.order_date"></td>
                 <td class="px-4 py-2 text-right text-xs" x-text="o.amount>0?'₩'+o.amount.toLocaleString('ko-KR'):'-'"></td>
                 <td class="px-4 py-2 text-center">
-                  <span class="badge" :class="o.cancel_type==='pure_cancel'?'badge-rejected':o.cancel_type==='date_change'?'badge-medium':''"
-                    x-text="o.cancel_type==='pure_cancel'?'순수취소':o.cancel_type==='date_change'?'납기변경':(o.order_status||'-')"></span>
+                  <span class="badge" :class="o.cancel_type==='pure_cancel'?'badge-rejected':''"
+                    x-text="o.cancel_type==='pure_cancel'?'취소':(o.order_status||'-')"></span>
                 </td>
               </tr>
             </template>
@@ -370,6 +369,7 @@
                         </div>
                         <div class="font-medium text-gray-700" x-text="d.offline_store"></div>
                         <div class="text-gray-400" x-text="'수주 '+d.offline_date"></div>
+                        <div class="text-gray-400" x-show="d.offline_delivery_date" x-text="'납기 '+d.offline_delivery_date"></div>
                         <div x-text="d.offline_amount>0?'₩'+d.offline_amount.toLocaleString('ko-KR'):'-'"></div>
                       </div>
                       <div class="flex items-center justify-center text-2xl text-gray-300">→</div>
@@ -377,6 +377,7 @@
                         <div class="text-blue-600 font-semibold mb-0.5">온라인 수주</div>
                         <div class="font-medium text-gray-700" x-text="d.online_store"></div>
                         <div class="text-gray-400" x-text="'수주 '+d.online_date"></div>
+                        <div class="text-gray-400" x-show="d.online_delivery_date" x-text="'납기 '+d.online_delivery_date"></div>
                         <div x-text="d.online_amount>0?'₩'+d.online_amount.toLocaleString('ko-KR'):'-'"></div>
                         <div class="text-brand font-bold" x-show="d.compensation>0" x-text="'보전금 ₩'+d.compensation.toLocaleString('ko-KR')"></div>
                       </div>

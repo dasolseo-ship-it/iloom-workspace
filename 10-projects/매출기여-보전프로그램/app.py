@@ -320,6 +320,7 @@ def run_matching_engine(conn) -> dict:
               AND off.store_type    = 'offline'
               AND off.order_date   >= ?
               AND off.order_date   <= ?
+              AND off.order_date   <= on_.order_date
             WHERE on_.store_type   = 'online'
               AND on_.order_date   >= ?
               AND on_.order_date   <= ?
