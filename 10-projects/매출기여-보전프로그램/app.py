@@ -5,7 +5,8 @@
 import os
 import re
 import json
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import io
 from datetime import date, timedelta
 from typing import List, Optional
@@ -18,9 +19,10 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 app = FastAPI(title="매출기여 보전 프로그램")
-templates = Jinja2Templates(directory="templates")
 
-DB_PATH = os.environ.get("DB_PATH", "sales_contribution.db")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+templates = Jinja2Templates(directory=os.path.join(_HERE, "templates"))
 
 # ================================================================
 # 일룸 시리즈 / 품목 설정
@@ -49,6 +51,12 @@ ONLINE_STORES = frozenset([
     '오늘의 집', '오늘의집', '29CM', '에스에스지', '씨제이몰', '더현대닷컴',
 ])
 
+# 직영매장 제외 목록 — 태블로 업로드 시 자동 스킵
+DIRECT_STORES = frozenset([
+    '논현4', '분당서현', '송파4', '용산2', '미포2', '노원',
+    '강동아이파크', '부산센텀4', '수원광교3', '대전둔산5', '대구3',
+])
+
 # ERP 납기완료 상태값 (시스템마다 표기 다를 수 있어 여러 값 허용)
 DELIVERY_DONE_STATUSES = frozenset(['납기완료', '출고완료', '배송완료', '완료', '출고'])
 
@@ -70,42 +78,74 @@ EXCLUSION_RULES: dict[str, list[str]] = {
 # ================================================================
 # DB
 # ================================================================
+class _Conn:
+    """psycopg2 connection wrapper — sqlite3-like interface for drop-in compatibility."""
+
+    def __init__(self, pg_conn):
+        self._pg = pg_conn
+
+    def execute(self, sql, params=()):
+        sql = sql.replace('?', '%s')
+        cur = self._pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, list(params) if params else None)
+        return cur
+
+    def executemany(self, sql, seq):
+        sql = sql.replace('?', '%s')
+        cur = self._pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        psycopg2.extras.execute_batch(cur, sql, seq)
+        return cur
+
+    def commit(self):
+        self._pg.commit()
+
+    def rollback(self):
+        self._pg.rollback()
+
+    def close(self):
+        self._pg.close()
+
+
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = psycopg2.connect(DATABASE_URL)
+    wrapped = _Conn(conn)
     try:
-        yield conn
+        yield wrapped
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
 
 def init_db():
     with get_db() as conn:
-        conn.executescript("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 event_name TEXT NOT NULL,
                 announcement_date TEXT NOT NULL,
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 online_channel TEXT DEFAULT '네이버',
                 offline_lookback_days INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT (datetime('now', 'localtime'))
-            );
-
+                created_at TEXT DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS')
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS event_products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
                 product_name TEXT NOT NULL,
                 series TEXT NOT NULL,
                 category TEXT NOT NULL
-            );
-
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 store_name TEXT NOT NULL,
                 order_date TEXT NOT NULL,
                 customer_amount REAL NOT NULL,
@@ -113,18 +153,20 @@ def init_db():
                 result_type TEXT,
                 compensation REAL DEFAULT 0,
                 note TEXT,
-                created_at TEXT DEFAULT (datetime('now', 'localtime'))
-            );
-
+                created_at TEXT DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS')
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS order_products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
                 product_name TEXT NOT NULL,
                 series TEXT NOT NULL,
                 category TEXT NOT NULL,
                 match_status TEXT DEFAULT 'pending'
-            );
-
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS erp_orders (
                 order_no TEXT PRIMARY KEY,
                 order_base TEXT NOT NULL,
@@ -140,11 +182,12 @@ def init_db():
                 address_dong TEXT,
                 phone_last4 TEXT,
                 cancel_type TEXT,
-                import_date TEXT DEFAULT (date('now', 'localtime'))
-            );
-
+                import_date TEXT DEFAULT TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS matches (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 offline_order_no TEXT NOT NULL,
                 online_order_no TEXT NOT NULL,
                 event_id INTEGER REFERENCES events(id),
@@ -153,21 +196,23 @@ def init_db():
                 result_type TEXT,
                 compensation REAL DEFAULT 0,
                 status TEXT DEFAULT 'pending',
-                created_at TEXT DEFAULT (datetime('now', 'localtime'))
-            );
-
+                created_at TEXT DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS')
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS match_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
                 product_name TEXT DEFAULT '',
                 series TEXT NOT NULL,
                 category TEXT NOT NULL,
                 amount REAL DEFAULT 0,
                 match_status TEXT DEFAULT 'pending'
-            );
-
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS erp_order_lines (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 order_no TEXT NOT NULL,
                 set_code TEXT DEFAULT '',
                 series TEXT DEFAULT '',
@@ -176,29 +221,36 @@ def init_db():
                 sub_product2 TEXT DEFAULT '',
                 sub_product3 TEXT DEFAULT '',
                 amount REAL DEFAULT 0
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_erp_store_type   ON erp_orders(store_type);
-            CREATE INDEX IF NOT EXISTS idx_erp_customer_dong ON erp_orders(customer_name, address_dong);
-            CREATE INDEX IF NOT EXISTS idx_erp_order_date   ON erp_orders(order_date);
-            CREATE INDEX IF NOT EXISTS idx_erp_cancel_type  ON erp_orders(cancel_type);
-            CREATE INDEX IF NOT EXISTS idx_matches_event    ON matches(event_id);
-            CREATE INDEX IF NOT EXISTS idx_lines_order_no   ON erp_order_lines(order_no);
+            )
         """)
-        # 기존 DB 마이그레이션
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()]
-        if "online_channel" not in cols:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_erp_store_type    ON erp_orders(store_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_erp_customer_dong  ON erp_orders(customer_name, address_dong)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_erp_order_date    ON erp_orders(order_date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_erp_cancel_type   ON erp_orders(cancel_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_event     ON matches(event_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_lines_order_no    ON erp_order_lines(order_no)")
+
+        # 기존 DB 마이그레이션 (컬럼 누락 시 추가)
+        ev_cols = [r["column_name"] for r in conn.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name='events' AND table_schema='public'
+        """).fetchall()]
+        if "online_channel" not in ev_cols:
             conn.execute("ALTER TABLE events ADD COLUMN online_channel TEXT DEFAULT '네이버'")
-        if "offline_lookback_days" not in cols:
+        if "offline_lookback_days" not in ev_cols:
             conn.execute("ALTER TABLE events ADD COLUMN offline_lookback_days INTEGER DEFAULT 7")
-        item_cols = [r[1] for r in conn.execute("PRAGMA table_info(match_items)").fetchall()]
+
+        item_cols = [r["column_name"] for r in conn.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name='match_items' AND table_schema='public'
+        """).fetchall()]
         if "sub_product" not in item_cols:
             conn.execute("ALTER TABLE match_items ADD COLUMN sub_product TEXT DEFAULT ''")
         if "sub_product2" not in item_cols:
             conn.execute("ALTER TABLE match_items ADD COLUMN sub_product2 TEXT DEFAULT ''")
         if "sub_product3" not in item_cols:
             conn.execute("ALTER TABLE match_items ADD COLUMN sub_product3 TEXT DEFAULT ''")
-        # matches 테이블 UNIQUE 인덱스 (중복 방지)
+
         conn.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_pair
             ON matches(offline_order_no, online_order_no)
@@ -302,6 +354,7 @@ def run_matching_engine(conn) -> dict:
         delivery_cutoff = end_date.replace(year=cutoff_y, month=cutoff_m).isoformat()
 
         # 단일 JOIN: customer_name + address_dong 기준 후보 쌍 전부 추출
+        # online_channel 조건: 행사가 진행된 채널(플랫폼)에 한정하여 인정
         candidates = conn.execute("""
             SELECT
                 off.order_no    AS off_no,
@@ -322,6 +375,7 @@ def run_matching_engine(conn) -> dict:
               AND off.order_date   <= ?
               AND off.order_date   <= on_.order_date
             WHERE on_.store_type   = 'online'
+              AND on_.store_name   = ?
               AND on_.order_date   >= ?
               AND on_.order_date   <= ?
               AND on_.customer_name != ''
@@ -329,6 +383,7 @@ def run_matching_engine(conn) -> dict:
               AND on_.order_status  != '취소'
               AND (on_.delivery_date IS NULL OR on_.delivery_date <= ?)
         """, (offline_from, ev["end_date"],
+              ev["online_channel"],
               ev["start_date"], ev["end_date"],
               delivery_cutoff)).fetchall()
 
@@ -373,10 +428,11 @@ def run_matching_engine(conn) -> dict:
 
         if new_matches:
             conn.executemany("""
-                INSERT OR IGNORE INTO matches
+                INSERT INTO matches
                 (offline_order_no, online_order_no, event_id, match_keys,
                  match_confidence, result_type, compensation)
                 VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT (offline_order_no, online_order_no) DO NOTHING
             """, new_matches)
             total_matched += len(new_matches)
 
@@ -648,10 +704,10 @@ async def create_event(event: EventIn):
             )
 
         cur = conn.execute(
-            "INSERT INTO events (event_name, announcement_date, start_date, end_date, online_channel, offline_lookback_days) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO events (event_name, announcement_date, start_date, end_date, online_channel, offline_lookback_days) VALUES (?,?,?,?,?,?) RETURNING id",
             (event.event_name, event.announcement_date, event.start_date, event.end_date, event.online_channel, event.offline_lookback_days),
         )
-        event_id = cur.lastrowid
+        event_id = cur.fetchone()["id"]
         for p in event.products:
             conn.execute(
                 "INSERT INTO event_products (event_id, product_name, series, category) VALUES (?,?,?,?)",
@@ -788,11 +844,11 @@ async def create_order(order: OrderIn):
         result_type, compensation, note = calc_result(matched, order.customer_amount)
 
         cur = conn.execute(
-            "INSERT INTO orders (store_name, order_date, customer_amount, event_id, result_type, compensation, note) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO orders (store_name, order_date, customer_amount, event_id, result_type, compensation, note) VALUES (?,?,?,?,?,?,?) RETURNING id",
             (order.store_name, order.order_date, order.customer_amount,
              order.event_id, result_type, compensation, note),
         )
-        order_id = cur.lastrowid
+        order_id = cur.fetchone()["id"]
 
         for p in matched:
             conn.execute(
@@ -1116,15 +1172,34 @@ async def upload_tableau(file: UploadFile = File(...)):
     orders_map: dict[str, dict] = {}
     products_map: dict[str, list] = {}
 
+    last_order_no = None          # 병합 셀 연속 행 처리용
+    direct_skipped_nos: set = set()  # 직영매장 수주번호 (연속 행도 스킵)
+
     for row in ws.iter_rows(min_row=2, values_only=True):  # read_only 스트리밍
-        order_no = str(row[i_no]).strip() if row[i_no] else ''
-        if not order_no or order_no == 'None':
+        order_no_raw = str(row[i_no]).strip() if row[i_no] else ''
+        if order_no_raw and order_no_raw != 'None':
+            # 새 수주 시작 행
+            last_order_no = order_no_raw
+            order_no = order_no_raw
+        else:
+            # 병합 셀 연속 행 → 직전 수주번호 승계
+            order_no = last_order_no
+
+        if not order_no:
+            continue
+
+        # 직영매장 수주 건너뜀 (연속 행 포함)
+        if order_no in direct_skipped_nos:
             continue
 
         store = str(row[i_store]).strip() if row[i_store] else ''
-        store_type = 'online' if store in ONLINE_STORES else 'offline'
 
         if order_no not in orders_map:
+            # 첫 행: 직영 여부 확인 및 수주 등록
+            if store in DIRECT_STORES:
+                direct_skipped_nos.add(order_no)
+                continue
+            store_type = 'online' if store in ONLINE_STORES else 'offline'
             base, seq = parse_order_no(order_no)
             orders_map[order_no] = {
                 'order_no': order_no,
@@ -1142,6 +1217,7 @@ async def upload_tableau(file: UploadFile = File(...)):
             }
             products_map[order_no] = []
 
+        # 금액 및 품목 누적 (첫 행 + 연속 행 모두)
         amt = float(row[i_amount]) if (i_amount < len(row) and row[i_amount]) else 0.0
         orders_map[order_no]['amount'] += amt
 
@@ -1161,6 +1237,28 @@ async def upload_tableau(file: UploadFile = File(...)):
     wb.close()
     inserted = skipped = 0
     with get_db() as conn:
+        # 검토 완료(승인/반려) 상태 백업 — 재업로드 후 복원
+        reviewed_rows = conn.execute("""
+            SELECT id, offline_order_no, online_order_no, event_id, status, compensation
+            FROM matches WHERE status IN ('approved', 'rejected')
+        """).fetchall()
+        reviewed_backup = {}
+        for rm in reviewed_rows:
+            items = conn.execute(
+                "SELECT product_name, series, category, sub_product, sub_product2, sub_product3, amount, match_status "
+                "FROM match_items WHERE match_id=?", (rm["id"],)
+            ).fetchall()
+            key = (rm["offline_order_no"], rm["online_order_no"])
+            reviewed_backup[key] = {
+                "status": rm["status"],
+                "compensation": rm["compensation"],
+                "items": [dict(i) for i in items],
+            }
+
+        # 이전 업로드 데이터 전체 초기화 (직영 잔여 데이터 제거)
+        conn.execute("DELETE FROM matches")
+        conn.execute("DELETE FROM erp_order_lines")
+        conn.execute("DELETE FROM erp_orders")
         order_rows = []
         line_rows = []
         order_nos = []
@@ -1176,16 +1274,19 @@ async def upload_tableau(file: UploadFile = File(...)):
                 line_rows.append((order['order_no'], p['set_code'], p['series'], p['category'],
                                   p['sub1'], p['sub2'], p['sub3'], p['amount']))
         conn.executemany("""
-            INSERT OR REPLACE INTO erp_orders
+            INSERT INTO erp_orders
             (order_no, order_base, order_seq, store_name, store_type, order_status,
              customer_name, order_date, delivery_date, amount, address_dong, phone_last4)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT (order_no) DO UPDATE SET
+                order_base=EXCLUDED.order_base, order_seq=EXCLUDED.order_seq,
+                store_name=EXCLUDED.store_name, store_type=EXCLUDED.store_type,
+                order_status=EXCLUDED.order_status, customer_name=EXCLUDED.customer_name,
+                order_date=EXCLUDED.order_date, delivery_date=EXCLUDED.delivery_date,
+                amount=EXCLUDED.amount, address_dong=EXCLUDED.address_dong,
+                phone_last4=EXCLUDED.phone_last4
         """, order_rows)
-        # SQLite 변수 999개 제한 → 청크 처리
-        chunk = 900
-        for i in range(0, len(order_nos), chunk):
-            batch = order_nos[i:i+chunk]
-            conn.execute(f"DELETE FROM erp_order_lines WHERE order_no IN ({','.join(['?']*len(batch))})", batch)
+        conn.execute("DELETE FROM erp_order_lines WHERE order_no = ANY(?)", (list(order_nos),))
         conn.executemany("""
             INSERT INTO erp_order_lines
             (order_no, set_code, series, category, sub_product, sub_product2, sub_product3, amount)
@@ -1196,6 +1297,33 @@ async def upload_tableau(file: UploadFile = File(...)):
         classify_cancel_types(conn)
         match_result = run_matching_engine(conn)
         delivery_updated = refresh_delivery_status(conn)
+
+        # 검토 완료 상태 복원
+        restored = 0
+        for (off_no, on_no), bak in reviewed_backup.items():
+            m = conn.execute(
+                "SELECT id FROM matches WHERE offline_order_no=? AND online_order_no=?",
+                (off_no, on_no)
+            ).fetchone()
+            if not m:
+                continue
+            conn.execute(
+                "UPDATE matches SET status=?, compensation=? WHERE id=?",
+                (bak["status"], bak["compensation"], m["id"])
+            )
+            if bak["items"]:
+                conn.execute("DELETE FROM match_items WHERE match_id=?", (m["id"],))
+                conn.executemany("""
+                    INSERT INTO match_items
+                    (match_id, product_name, series, category, sub_product, sub_product2, sub_product3, amount, match_status)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                """, [
+                    (m["id"], it["product_name"], it["series"], it["category"],
+                     it["sub_product"], it["sub_product2"], it["sub_product3"],
+                     it["amount"], it["match_status"])
+                    for it in bak["items"]
+                ])
+            restored += 1
 
         total_online = conn.execute("SELECT COUNT(*) as c FROM erp_orders WHERE store_type='online'").fetchone()["c"]
         total_offline = conn.execute("SELECT COUNT(*) as c FROM erp_orders WHERE store_type='offline'").fetchone()["c"]
@@ -1216,6 +1344,7 @@ async def upload_tableau(file: UploadFile = File(...)):
             "납기완료_업데이트": delivery_updated,
             "high_신뢰도_핸드폰일치": high_conf,
             "medium_신뢰도_이름동일치": med_conf,
+            "검토상태_복원": restored,
         }
     }
 
@@ -1284,10 +1413,17 @@ async def upload_erp(file: UploadFile = File(...)):
 
             try:
                 conn.execute("""
-                    INSERT OR REPLACE INTO erp_orders
+                    INSERT INTO erp_orders
                     (order_no, order_base, order_seq, store_name, store_type, order_status,
                      customer_name, order_name, order_date, delivery_date, amount, address_dong)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT (order_no) DO UPDATE SET
+                        order_base=EXCLUDED.order_base, order_seq=EXCLUDED.order_seq,
+                        store_name=EXCLUDED.store_name, store_type=EXCLUDED.store_type,
+                        order_status=EXCLUDED.order_status, customer_name=EXCLUDED.customer_name,
+                        order_name=EXCLUDED.order_name, order_date=EXCLUDED.order_date,
+                        delivery_date=EXCLUDED.delivery_date, amount=EXCLUDED.amount,
+                        address_dong=EXCLUDED.address_dong
                 """, (order_no, base, seq, store, store_type, status,
                       customer_name, order_name, order_date, delivery_date, amount, address))
                 inserted += 1
@@ -1473,8 +1609,8 @@ async def list_clusters(event_id: int = 0):
                 SUM(CASE WHEN m.result_type='cancel_match_pending'   THEN 1 ELSE 0 END)        AS pending_cnt,
                 SUM(CASE WHEN m.result_type='active_match'           THEN 1 ELSE 0 END)        AS active_cnt,
                 SUM(CASE WHEN m.result_type='cancel_match_delivered' THEN m.compensation ELSE 0 END) AS total_compensation,
-                GROUP_CONCAT(DISTINCT of.store_name)                                   AS offline_stores,
-                GROUP_CONCAT(DISTINCT on_.store_name)                                  AS online_stores,
+                STRING_AGG(DISTINCT of.store_name, ',')                                AS offline_stores,
+                STRING_AGG(DISTINCT on_.store_name, ',')                               AS online_stores,
                 MIN(m.match_confidence)                                                AS min_confidence
             FROM matches m
             JOIN erp_orders of  ON m.offline_order_no = of.order_no
@@ -1589,6 +1725,28 @@ async def trigger_auto_product_match(match_id: int):
     return {"approved": cnt["approved"], "manual_review": cnt["manual_review"], "rejected": cnt["rejected"]}
 
 
+@app.post("/api/events/{event_id}/auto-match-all")
+async def auto_match_all(event_id: int):
+    """해당 행사의 검토대기 매칭 전체 자동 품목매칭 일괄 실행"""
+    with get_db() as conn:
+        pending_ids = [
+            r["id"] for r in conn.execute(
+                "SELECT id FROM matches WHERE event_id=? AND status='pending'",
+                (event_id,)
+            ).fetchall()
+        ]
+        totals = {"approved": 0, "manual_review": 0, "rejected": 0}
+        for mid in pending_ids:
+            cnt = auto_product_match(conn, mid)
+            for k in totals:
+                totals[k] += cnt[k]
+    return {
+        "message": f"{len(pending_ids)}건 자동매칭 완료",
+        "processed": len(pending_ids),
+        **totals,
+    }
+
+
 @app.patch("/api/match-items/{item_id}/decide")
 async def decide_match_item(item_id: int, body: dict = Body(...)):
     decision = body.get("status")
@@ -1681,7 +1839,9 @@ async def event_stats(event_id: int):
                 SUM(CASE WHEN result_type='active_match'           THEN 1 ELSE 0 END) as active_cnt,
                 SUM(CASE WHEN status='pending' AND result_type != 'active_match' THEN 1 ELSE 0 END) as pending_review_cnt,
                 SUM(CASE WHEN result_type='cancel_match_delivered' THEN compensation ELSE 0 END) as expected_compensation,
-                SUM(CASE WHEN status='approved' THEN compensation ELSE 0 END) as approved_compensation
+                SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END) as approved_cnt,
+                SUM(CASE WHEN status='approved' THEN compensation ELSE 0 END) as approved_compensation,
+                SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) as rejected_cnt
             FROM matches WHERE event_id=?
         """, (event_id,)).fetchone()
         cancel_cnt = conn.execute(

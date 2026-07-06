@@ -89,15 +89,35 @@
         <div class="flex gap-1.5 mb-4">
           <span class="badge" style="background:#eff6ff;color:#1d4ed8;" x-text="ev.online_channel||'네이버'"></span>
         </div>
-        <div class="border-t border-gray-100 pt-3 grid grid-cols-2 gap-2">
-          <div>
-            <div class="text-lg font-bold text-brand" x-text="eventStats[ev.id] ? ((eventStats[ev.id].confirmed_cnt||0)+(eventStats[ev.id].pending_cnt||0))+'건' : '-'"></div>
-            <div class="text-xs text-gray-400">보전 후보</div>
+        <div class="border-t border-gray-100 pt-3 space-y-2">
+          <!-- 보전 후보 / 예상 보전금 -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <div class="text-lg font-bold text-brand" x-text="eventStats[ev.id] ? ((eventStats[ev.id].confirmed_cnt||0)+(eventStats[ev.id].pending_cnt||0))+'건' : '-'"></div>
+              <div class="text-xs text-gray-400">보전 후보</div>
+            </div>
+            <div>
+              <div class="text-base font-bold text-gray-700" x-text="eventStats[ev.id] ? '₩'+(eventStats[ev.id].expected_compensation||0).toLocaleString('ko-KR') : '-'"></div>
+              <div class="text-xs text-gray-400">예상 보전금</div>
+            </div>
           </div>
-          <div>
-            <div class="text-base font-bold text-gray-700" x-text="eventStats[ev.id] ? '₩'+(eventStats[ev.id].expected_compensation||0).toLocaleString('ko-KR') : '-'"></div>
-            <div class="text-xs text-gray-400">예상 보전금</div>
-          </div>
+          <!-- 승인 완료 / 확정 보전금 (승인 건이 있을 때만) -->
+          <template x-if="(eventStats[ev.id]?.approved_cnt||0) > 0">
+            <div class="grid grid-cols-2 gap-2 border-t border-gray-50 pt-2">
+              <div>
+                <div class="text-base font-bold text-green-600" x-text="(eventStats[ev.id].approved_cnt||0)+'건'"></div>
+                <div class="text-xs text-gray-400">최종 보전 대상</div>
+              </div>
+              <div>
+                <div class="text-sm font-bold text-green-600" x-text="'₩'+(eventStats[ev.id].approved_compensation||0).toLocaleString('ko-KR')"></div>
+                <div class="text-xs text-gray-400">확정 보전금</div>
+              </div>
+            </div>
+          </template>
+          <!-- 검토 대기 알림 -->
+          <template x-if="(eventStats[ev.id]?.pending_review_cnt||0) > 0">
+            <div class="text-xs text-orange-500 font-medium" x-text="'⏳ 검토 대기 '+(eventStats[ev.id].pending_review_cnt)+'건'"></div>
+          </template>
         </div>
       </div>
     </template>
@@ -311,10 +331,17 @@
         <button @click="clusterFilter='candidate'" :class="clusterFilter==='candidate'?'bg-red-50 text-red-600 font-semibold':'text-gray-400'" class="px-3 py-1.5 rounded-lg">보전 후보</button>
         <button @click="clusterFilter='monitoring'" :class="clusterFilter==='monitoring'?'bg-gray-100 text-gray-600 font-semibold':'text-gray-400'" class="px-3 py-1.5 rounded-lg">모니터링</button>
       </div>
-      <button @click="loadClusters()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        새로고침
-      </button>
+      <div class="flex items-center gap-2">
+        <button @click="autoMatchAll()" x-show="(currentStats.pending_review_cnt||0)>0"
+          class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          전체 자동매칭
+        </button>
+        <button @click="loadClusters()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          새로고침
+        </button>
+      </div>
     </div>
 
     <template x-if="filteredClusters.length===0">
@@ -492,6 +519,7 @@
           </div>
           <div class="flex justify-between text-xs">
             <span class="text-green-600" x-text="(s.approved_cnt||0)+'건 승인'"></span>
+            <span class="text-red-400" x-text="(s.rejected_cnt||0)+'건 반려'"></span>
             <span class="text-orange-500" x-text="(s.pending_cnt||0)+'건 대기'"></span>
           </div>
         </div>
@@ -504,7 +532,7 @@
           <thead class="bg-gray-50 text-xs text-gray-500">
             <tr>
               <th class="px-4 py-3 text-left">매장명</th><th class="px-4 py-3 text-center">전체</th>
-              <th class="px-4 py-3 text-center">승인</th><th class="px-4 py-3 text-center">대기</th>
+              <th class="px-4 py-3 text-center">승인</th><th class="px-4 py-3 text-center">반려</th><th class="px-4 py-3 text-center">대기</th>
               <th class="px-4 py-3 text-right">예상 보전금</th><th class="px-4 py-3 text-right">확정 보전금</th>
             </tr>
           </thead>
@@ -514,6 +542,7 @@
                 <td class="px-4 py-3 font-medium" x-text="s.store_name"></td>
                 <td class="px-4 py-3 text-center text-gray-500" x-text="s.total"></td>
                 <td class="px-4 py-3 text-center text-green-600 font-medium" x-text="s.approved_cnt||0"></td>
+                <td class="px-4 py-3 text-center text-red-400" x-text="s.rejected_cnt||0"></td>
                 <td class="px-4 py-3 text-center text-orange-500" x-text="s.pending_cnt||0"></td>
                 <td class="px-4 py-3 text-right text-gray-700" x-text="(s.expected_compensation||0)>0?'₩'+s.expected_compensation.toLocaleString('ko-KR'):'-'"></td>
                 <td class="px-4 py-3 text-right font-bold text-brand" x-text="(s.total_compensation||0)>0?'₩'+s.total_compensation.toLocaleString('ko-KR'):'-'"></td>
@@ -523,6 +552,7 @@
               <td class="px-4 py-3">합계</td>
               <td class="px-4 py-3 text-center" x-text="storeStats.reduce((a,s)=>a+s.total,0)"></td>
               <td class="px-4 py-3 text-center text-green-600" x-text="storeStats.reduce((a,s)=>a+(s.approved_cnt||0),0)"></td>
+              <td class="px-4 py-3 text-center text-red-400" x-text="storeStats.reduce((a,s)=>a+(s.rejected_cnt||0),0)"></td>
               <td class="px-4 py-3 text-center text-orange-500" x-text="storeStats.reduce((a,s)=>a+(s.pending_cnt||0),0)"></td>
               <td class="px-4 py-3 text-right text-gray-700" x-text="'₩'+storeStats.reduce((a,s)=>a+(s.expected_compensation||0),0).toLocaleString('ko-KR')"></td>
               <td class="px-4 py-3 text-right text-brand" x-text="'₩'+storeStats.reduce((a,s)=>a+(s.total_compensation||0),0).toLocaleString('ko-KR')"></td>
@@ -719,6 +749,15 @@ function app() {
       const c = this.clusters.find(c=>this.clusterKey(c)===key);
       if (c) { this.clusterExpandedSet[key]=false; await this.toggleCluster(c); }
       await Promise.all([this.loadClusters(), this.loadCurrentStats()]);
+    },
+    async autoMatchAll() {
+      if (!confirm(`검토 대기 ${this.currentStats.pending_review_cnt}건 전체 자동매칭을 실행할까요?`)) return;
+      const res = await fetch(`/api/events/${this.selectedEvent.id}/auto-match-all`, { method: 'POST' });
+      const data = await res.json();
+      alert(`완료: ${data.processed}건 처리 (승인가능 ${data.approved}건 / 수동검토 ${data.manual_review}건 / 불인정 ${data.rejected}건)`);
+      this.clusterDetails = {};
+      await this.loadClusters();
+      await this.loadCurrentStats();
     },
     async runAutoProductMatch(matchId, key) {
       await fetch('/api/matches/'+matchId+'/auto-product-match', { method: 'POST' });
