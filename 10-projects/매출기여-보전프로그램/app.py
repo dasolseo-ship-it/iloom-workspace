@@ -23,7 +23,13 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(application):
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        import traceback
+        print("=== DB 초기화 실패 ===")
+        print(traceback.format_exc())
+        print("=====================")
     yield
 
 app = FastAPI(title="매출기여 보전 프로그램", lifespan=lifespan)
