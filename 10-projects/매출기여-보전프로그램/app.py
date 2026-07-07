@@ -19,7 +19,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-app = FastAPI(title="매출기여 보전 프로그램")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(application):
+    init_db()
+    yield
+
+app = FastAPI(title="매출기여 보전 프로그램", lifespan=lifespan)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -256,9 +263,6 @@ def init_db():
             CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_pair
             ON matches(offline_order_no, online_order_no)
         """)
-
-
-init_db()
 
 
 # ================================================================
