@@ -8,3 +8,5 @@
 __pycache__/
 *.pyc
 *.db
+*.log
+서버시작.bat
