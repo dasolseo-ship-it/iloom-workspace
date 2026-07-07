@@ -374,9 +374,34 @@
 > "잘했구만. 데이터 소스(태블로) 찾는 게 가장 어려운 과정이었는데 그걸 해결했으니까 여기까지 온 거다."
 
 ### TODO (Next Step)
-- [ ] **[오늘]** Supabase 계정 생성 + DB 연결 문자열 발급
-- [ ] **[오늘]** Vercel 계정 생성 + GitHub 연결 → 배포
-- [ ] 배포 완료 후 실제 태블로 파일 재업로드 → 데이터 정합성 확인
-- [ ] 행사 종결 버튼 기능 추가 (추후)
-- [ ] 시리즈 목록 확충 또는 검색 기능 추가 (추후)
+- [x] **[완료]** Supabase 계정 생성 + DB 연결 문자열 발급 ✅ 2026-07-07
+- [x] **[완료]** Vercel 계정 생성 + GitHub 연결 → 배포 ✅ 2026-07-07
+- [x] **[완료]** SQLite → Supabase 데이터 마이그레이션 (행사 3건, 수주 37,287건, 품목라인 81,955건, 매칭 54건) ✅ 2026-07-07
+- [ ] **[내일]** 행사 종결 버튼 기능 추가
+- [ ] **[내일]** 시리즈 목록 확충 또는 검색 기능 추가
+- [ ] AI 커뮤니티 게시판 소개 글 작성 (약속)
+
+---
+
+## 2026-07-07 — Vercel + Supabase 배포 완료
+
+### 완료
+- [x] app.py Python 호환성 수정 (`from __future__ import annotations`)
+- [x] vercel.json 업그레이드 (version 2, maxLambdaSize 15mb)
+- [x] init_db() 모듈 레벨 → FastAPI lifespan 이벤트로 이동 (Vercel 크래시 방지)
+- [x] Supabase Transaction Pooler → Session Pooler(5432) 전환 (IPv4 안정성)
+- [x] SQLite 기존 데이터 전체 Supabase 마이그레이션 완료
+- [x] **배포 URL 확정**: `iloom-workspace-six.vercel.app`
+
+### 배포 환경
+| 항목 | 내용 |
+|------|------|
+| 앱 서버 | Vercel (Serverless, 무료) |
+| DB | Supabase PostgreSQL (무료 티어) |
+| URL | iloom-workspace-six.vercel.app |
+| DB 연결 | Session Pooler, ap-northeast-1 (Tokyo) |
+
+### TODO (Next Step)
+- [ ] 행사 종결 버튼 기능 추가
+- [ ] 시리즈 목록 확충 또는 검색 기능 추가
 - [ ] AI 커뮤니티 게시판 소개 글 작성 (약속)
