@@ -600,13 +600,16 @@ def is_same_series(s1: str, s2: str) -> bool:
 
 
 def match_products(order_products: list[dict], event_products: list[dict]) -> list[dict]:
-    """수주 상품별 인정 여부 판정"""
+    """수주 상품별 인정 여부 판정. event_products가 없으면 전체 인정."""
     results = []
     for op in order_products:
-        matched = any(
-            is_same_series(op["series"], ep["series"]) and op["category"] == ep["category"]
-            for ep in event_products
-        )
+        if not event_products:
+            matched = True
+        else:
+            matched = any(
+                is_same_series(op["series"], ep["series"]) and op["category"] == ep["category"]
+                for ep in event_products
+            )
         results.append({**op, "match_status": "approved" if matched else "rejected"})
     return results
 
@@ -641,7 +644,7 @@ class EventIn(BaseModel):
     end_date: str
     online_channel: str = "네이버"
     offline_lookback_days: int = 30
-    products: List[ProductIn]
+    products: List[ProductIn] = []
 
 
 class OrderIn(BaseModel):
