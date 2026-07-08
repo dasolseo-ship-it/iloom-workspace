@@ -1592,7 +1592,7 @@ async def upload_erp(file: UploadFile = File(...)):
 
 
 @app.get("/api/erp/orders")
-async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 50):
+async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 10):
     with get_db() as conn:
         q = "SELECT * FROM erp_orders WHERE 1=1"
         params: list = []
@@ -1603,7 +1603,7 @@ async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: s
         if cancel_type:
             q += " AND cancel_type=?"; params.append(cancel_type)
         q += " ORDER BY order_date DESC, order_no LIMIT ?"
-        params.append(min(limit, 100))
+        params.append(min(limit, 50))
         rows = conn.execute(q, params).fetchall()
     return [dict(r) for r in rows]
 
