@@ -648,7 +648,9 @@ function app() {
     async init() { await Promise.all([this.loadConfig(), this.loadEvents()]); },
     async loadConfig() { const r = await fetch('/api/config'); this.config = await r.json(); },
     async loadEvents() {
-      const r = await fetch('/api/events'); this.events = await r.json();
+      const r = await fetch('/api/events');
+      const data = await r.json();
+      this.events = data.sort((a, b) => (a.is_closed ? 1 : 0) - (b.is_closed ? 1 : 0));
       for (const ev of this.events) this.loadEventStats(ev.id);
     },
     async loadEventStats(id) {
