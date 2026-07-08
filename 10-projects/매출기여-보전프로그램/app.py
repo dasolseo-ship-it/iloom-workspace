@@ -257,6 +257,10 @@ def init_db():
             conn.execute("ALTER TABLE events ADD COLUMN is_closed BOOLEAN DEFAULT FALSE")
         if "closed_at" not in ev_cols:
             conn.execute("ALTER TABLE events ADD COLUMN closed_at TEXT DEFAULT NULL")
+        if "is_deleted" not in ev_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE")
+        if "deleted_at" not in ev_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN deleted_at TEXT DEFAULT NULL")
 
         item_cols = [r["column_name"] for r in conn.execute("""
             SELECT column_name FROM information_schema.columns
@@ -737,7 +741,7 @@ async def create_event(event: EventIn):
 @app.get("/api/events")
 async def list_events():
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM events ORDER BY announcement_date DESC").fetchall()
+        rows = conn.execute("SELECT * FROM events WHERE is_deleted IS NOT TRUE ORDER BY announcement_date DESC").fetchall()
         result = []
         for e in rows:
             products = conn.execute(
@@ -799,9 +803,35 @@ async def toggle_close_event(event_id: int):
 
 @app.delete("/api/events/{event_id}")
 async def delete_event(event_id: int):
+    """소프트 삭제 — 실제 삭제 대신 is_deleted=TRUE 처리"""
     with get_db() as conn:
-        conn.execute("DELETE FROM events WHERE id=?", (event_id,))
+        ev = conn.execute("SELECT id FROM events WHERE id=? AND is_deleted IS NOT TRUE", (event_id,)).fetchone()
+        if not ev:
+            raise HTTPException(404, "행사를 찾을 수 없습니다")
+        deleted_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute("UPDATE events SET is_deleted=TRUE, deleted_at=? WHERE id=?", (deleted_at, event_id))
     return {"message": "삭제 완료"}
+
+
+@app.get("/api/events/trash")
+async def list_trash():
+    """삭제된 행사 목록"""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, event_name, start_date, end_date, online_channel, deleted_at FROM events WHERE is_deleted=TRUE ORDER BY deleted_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.patch("/api/events/{event_id}/restore")
+async def restore_event(event_id: int):
+    """삭제된 행사 복원"""
+    with get_db() as conn:
+        ev = conn.execute("SELECT id FROM events WHERE id=? AND is_deleted=TRUE", (event_id,)).fetchone()
+        if not ev:
+            raise HTTPException(404, "복원할 행사를 찾을 수 없습니다")
+        conn.execute("UPDATE events SET is_deleted=FALSE, deleted_at=NULL WHERE id=?", (event_id,))
+    return {"message": "복원 완료"}
 
 
 # 커넥트플러스 Excel 업로드

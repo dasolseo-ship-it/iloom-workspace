@@ -59,10 +59,17 @@
       <h1 class="text-xl font-bold text-gray-800">행사 목록</h1>
       <p class="text-sm text-gray-400 mt-0.5">행사를 선택해 데이터 업로드 · 매칭 검토 · 보전 집계를 진행하세요</p>
     </div>
-    <button @click="showEventModal=true" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-      새 행사 등록
-    </button>
+    <div class="flex items-center gap-2">
+      <button @click="openTrash()" class="relative border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        휴지통
+        <span x-show="trashCount>0" x-text="trashCount" class="absolute -top-1.5 -right-1.5 bg-gray-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center leading-none"></span>
+      </button>
+      <button @click="showEventModal=true" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        새 행사 등록
+      </button>
+    </div>
   </div>
 
   <template x-if="events.length === 0">
@@ -624,6 +631,45 @@
   </div>
 </div>
 
+<!-- MODAL: 휴지통 -->
+<div x-show="showTrashModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-y-auto" @click.outside="showTrashModal=false">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          휴지통
+        </h3>
+        <button @click="showTrashModal=false" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <template x-if="trashItems.length === 0">
+        <div class="text-center py-10 text-gray-400">
+          <div class="text-3xl mb-2">🗑️</div>
+          <p class="text-sm">삭제된 행사가 없습니다</p>
+        </div>
+      </template>
+      <div class="space-y-2">
+        <template x-for="ev in trashItems" :key="ev.id">
+          <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+            <div class="flex-1 min-w-0 pr-3">
+              <div class="font-medium text-gray-700 text-sm truncate" x-text="ev.event_name"></div>
+              <div class="text-xs text-gray-400 mt-0.5" x-text="ev.start_date + ' ~ ' + ev.end_date"></div>
+              <div class="text-xs text-gray-300 mt-0.5" x-text="'삭제일: ' + (ev.deleted_at||'').slice(0,10)"></div>
+            </div>
+            <button @click="restoreEvent(ev.id)"
+                    class="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-brand border border-brand px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+              복원
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div x-show="toast.show" x-cloak x-transition
   class="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl shadow-lg text-sm font-medium z-50"
@@ -642,10 +688,11 @@ function app() {
     showManualForm: false, manualForm: { offline_order_no: '', online_order_no: '', reason: '' }, submitting: false,
     storeStats: [],
     showEventModal: false,
+    showTrashModal: false, trashItems: [], trashCount: 0,
     eventForm: { event_name: '', announcement_date: '', start_date: '', end_date: '', online_channel: '네이버', products: [] },
     toast: { show: false, message: '', type: 'success' },
 
-    async init() { await Promise.all([this.loadConfig(), this.loadEvents()]); },
+    async init() { await Promise.all([this.loadConfig(), this.loadEvents(), this.loadTrashCount()]); },
     async loadConfig() { const r = await fetch('/api/config'); this.config = await r.json(); },
     async loadEvents() {
       const r = await fetch('/api/events');
@@ -697,9 +744,28 @@ function app() {
     },
 
     async deleteEvent(id) {
-      if (!confirm('행사를 삭제하시겠습니까?')) return;
+      if (!confirm('행사를 삭제하시겠습니까?\n(휴지통에서 복원할 수 있습니다)')) return;
       await fetch('/api/events/'+id, { method: 'DELETE' });
-      this.showToast('삭제되었습니다'); await this.loadEvents();
+      this.showToast('삭제되었습니다. 휴지통에서 복원 가능합니다');
+      await this.loadEvents(); await this.loadTrashCount();
+    },
+
+    async loadTrashCount() {
+      try { const r = await fetch('/api/events/trash'); const d = await r.json(); this.trashCount = d.length; } catch {}
+    },
+
+    async openTrash() {
+      const r = await fetch('/api/events/trash');
+      this.trashItems = await r.json();
+      this.trashCount = this.trashItems.length;
+      this.showTrashModal = true;
+    },
+
+    async restoreEvent(id) {
+      const r = await fetch('/api/events/'+id+'/restore', { method: 'PATCH' });
+      if (!r.ok) return;
+      this.showToast('행사가 복원되었습니다');
+      await this.openTrash(); await this.loadEvents();
     },
 
     async loadErpOrders() {
