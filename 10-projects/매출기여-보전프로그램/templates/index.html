@@ -263,7 +263,7 @@
 
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-        <h3 class="font-semibold text-sm text-gray-700">업로드된 수주 데이터</h3>
+        <h3 class="font-semibold text-sm text-gray-700">업로드된 수주 데이터 <span class="font-normal text-gray-400 text-xs" x-show="erpOrders.length>0" x-text="'(최근 '+erpOrders.length+'건)'"></span></h3>
         <div class="flex gap-1 text-xs">
           <button @click="erpFilter='pure_cancel'; loadErpOrders()" :class="erpFilter==='pure_cancel'?'bg-red-50 text-red-600 font-semibold':'text-gray-400'" class="px-2 py-1 rounded">취소</button>
           <button @click="erpFilter=''; loadErpOrders()" :class="erpFilter===''?'bg-gray-100 text-gray-700 font-semibold':'text-gray-400'" class="px-2 py-1 rounded">전체</button>
@@ -698,10 +698,19 @@ function app() {
       const r = await fetch('/api/events');
       const data = await r.json();
       this.events = data.sort((a, b) => (a.is_closed ? 1 : 0) - (b.is_closed ? 1 : 0));
-      for (const ev of this.events) this.loadEventStats(ev.id);
-    },
-    async loadEventStats(id) {
-      try { const r = await fetch('/api/events/'+id+'/stats'); if (r.ok) this.eventStats = { ...this.eventStats, [id]: await r.json() }; } catch {}
+      const stats = {};
+      for (const ev of this.events) {
+        stats[ev.id] = {
+          confirmed_cnt: ev.confirmed_cnt || 0,
+          pending_cnt: ev.pending_cnt || 0,
+          active_cnt: ev.active_cnt || 0,
+          pending_review_cnt: ev.pending_review_cnt || 0,
+          expected_compensation: ev.expected_compensation || 0,
+          approved_cnt: ev.approved_cnt || 0,
+          approved_compensation: ev.approved_compensation || 0,
+        };
+      }
+      this.eventStats = stats;
     },
 
     goHome() {

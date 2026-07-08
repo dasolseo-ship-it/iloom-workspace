@@ -741,20 +741,31 @@ async def create_event(event: EventIn):
 @app.get("/api/events")
 async def list_events():
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM events WHERE is_deleted IS NOT TRUE ORDER BY announcement_date DESC").fetchall()
+        rows = conn.execute("""
+            SELECT e.*,
+                COUNT(m.id) FILTER (WHERE m.result_type='cancel_match_delivered')               AS confirmed_cnt,
+                COUNT(m.id) FILTER (WHERE m.result_type='cancel_match_pending')                 AS pending_cnt,
+                COUNT(m.id) FILTER (WHERE m.result_type='active_match')                         AS active_cnt,
+                COUNT(m.id) FILTER (WHERE m.status='pending' AND m.result_type!='active_match') AS pending_review_cnt,
+                COALESCE(SUM(m.compensation) FILTER (WHERE m.result_type='cancel_match_delivered'), 0) AS expected_compensation,
+                COUNT(m.id) FILTER (WHERE m.status='approved')                                  AS approved_cnt,
+                COALESCE(SUM(m.compensation) FILTER (WHERE m.status='approved'), 0)             AS approved_compensation
+            FROM events e
+            LEFT JOIN matches m ON e.id = m.event_id
+            WHERE e.is_deleted IS NOT TRUE
+            GROUP BY e.id
+            ORDER BY e.announcement_date DESC
+        """).fetchall()
         result = []
         for e in rows:
-            products = conn.execute(
-                "SELECT * FROM event_products WHERE event_id=?", (e["id"],)
-            ).fetchall()
             ann = date.fromisoformat(e["announcement_date"])
             day_after = (ann + timedelta(days=1)).isoformat()
             lookback = e["offline_lookback_days"] if e["offline_lookback_days"] else 30
             offline_order_from = (ann - timedelta(days=lookback)).isoformat()
             ev_dict = dict(e)
             ev_dict["offline_extract_from"] = day_after
-            ev_dict["offline_order_from"] = offline_order_from  # 오프라인 수주 하한일
-            ev_dict["products"] = [dict(p) for p in products]
+            ev_dict["offline_order_from"] = offline_order_from
+            ev_dict["products"] = []
             result.append(ev_dict)
     return result
 
@@ -1545,7 +1556,7 @@ async def upload_erp(file: UploadFile = File(...)):
 
 
 @app.get("/api/erp/orders")
-async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = ""):
+async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 300):
     with get_db() as conn:
         q = "SELECT * FROM erp_orders WHERE 1=1"
         params: list = []
@@ -1555,7 +1566,8 @@ async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: s
             q += " AND order_status=?"; params.append(status)
         if cancel_type:
             q += " AND cancel_type=?"; params.append(cancel_type)
-        q += " ORDER BY order_date DESC, order_no"
+        q += " ORDER BY order_date DESC, order_no LIMIT ?"
+        params.append(min(limit, 500))
         rows = conn.execute(q, params).fetchall()
     return [dict(r) for r in rows]
 
