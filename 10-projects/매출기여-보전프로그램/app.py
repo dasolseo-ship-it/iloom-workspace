@@ -9,7 +9,7 @@ import json
 import psycopg2
 import psycopg2.extras
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from contextlib import contextmanager
 
@@ -253,6 +253,10 @@ def init_db():
             conn.execute("ALTER TABLE events ADD COLUMN online_channel TEXT DEFAULT '네이버'")
         if "offline_lookback_days" not in ev_cols:
             conn.execute("ALTER TABLE events ADD COLUMN offline_lookback_days INTEGER DEFAULT 7")
+        if "is_closed" not in ev_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN is_closed BOOLEAN DEFAULT FALSE")
+        if "closed_at" not in ev_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN closed_at TEXT DEFAULT NULL")
 
         item_cols = [r["column_name"] for r in conn.execute("""
             SELECT column_name FROM information_schema.columns
@@ -772,6 +776,22 @@ async def get_extract_guide(event_id: int):
                 "note": f"행사 공지일({ev['announcement_date']}) D-1({d_minus_1.isoformat()})까지 취소된 오프라인 수주만 보전 대상"
             }
         }
+
+
+@app.patch("/api/events/{event_id}/close")
+async def toggle_close_event(event_id: int):
+    """행사 종결 토글 — 종결 ↔ 재개"""
+    with get_db() as conn:
+        ev = conn.execute("SELECT is_closed FROM events WHERE id=?", (event_id,)).fetchone()
+        if not ev:
+            raise HTTPException(404, "행사를 찾을 수 없습니다")
+        new_state = not bool(ev["is_closed"])
+        closed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if new_state else None
+        conn.execute(
+            "UPDATE events SET is_closed=?, closed_at=? WHERE id=?",
+            (new_state, closed_at, event_id),
+        )
+    return {"is_closed": new_state, "closed_at": closed_at}
 
 
 @app.delete("/api/events/{event_id}")
