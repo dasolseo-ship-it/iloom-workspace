@@ -692,7 +692,10 @@ function app() {
     eventForm: { event_name: '', announcement_date: '', start_date: '', end_date: '', online_channel: '네이버', products: [] },
     toast: { show: false, message: '', type: 'success' },
 
-    async init() { await Promise.all([this.loadConfig(), this.loadEvents(), this.loadTrashCount()]); },
+    async init() {
+      await Promise.all([this.loadConfig(), this.loadEvents()]);
+      this.loadTrashCount(); // 비블로킹 — 뱃지는 나중에 표시됨
+    },
     async loadConfig() { const r = await fetch('/api/config'); this.config = await r.json(); },
     async loadEvents() {
       const r = await fetch('/api/events');
@@ -720,8 +723,10 @@ function app() {
     },
     async enterEvent(ev) {
       this.selectedEvent = ev; this.view = 'event'; this.activeStep = 1; this.uploadResult = null;
-      await Promise.all([this.loadCurrentStats(), this.loadErpOrders(), this.loadErpStats()]);
+      this.erpOrders = [];
+      await Promise.all([this.loadCurrentStats(), this.loadErpStats()]);
       this.uploadDone = (this.erpStats.total_cancels > 0 || (this.currentStats.total_matches||0) > 0);
+      this.loadErpOrders(); // 비블로킹 — 테이블은 백그라운드에서 채워짐
     },
     async loadCurrentStats() {
       if (!this.selectedEvent) return;

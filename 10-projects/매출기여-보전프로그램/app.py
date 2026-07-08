@@ -8,7 +8,9 @@ import re
 import json
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 import io
+from threading import Lock
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 from contextlib import contextmanager
@@ -37,6 +39,22 @@ app = FastAPI(title="매출기여 보전 프로그램", lifespan=lifespan)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 templates = Jinja2Templates(directory=os.path.join(_HERE, "templates"))
+
+_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None
+_pool_lock = Lock()
+
+def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
+    global _pool
+    if _pool is not None and not _pool.closed:
+        return _pool
+    with _pool_lock:
+        if _pool is None or _pool.closed:
+            _pool = psycopg2.pool.ThreadedConnectionPool(
+                1, 4, DATABASE_URL,
+                keepalives=1, keepalives_idle=30,
+                keepalives_interval=10, keepalives_count=3,
+            )
+    return _pool
 
 # ================================================================
 # 일룸 시리즈 / 품목 설정
@@ -122,16 +140,34 @@ class _Conn:
 
 @contextmanager
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
+    global _pool
+    conn, pool, from_pool = None, None, False
+    try:
+        pool = _get_pool()
+        conn = pool.getconn()
+        from_pool = True
+    except Exception:
+        conn = psycopg2.connect(DATABASE_URL)
     wrapped = _Conn(conn)
     try:
         yield wrapped
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        conn.close()
+        if from_pool and pool and not pool.closed:
+            try:
+                pool.putconn(conn)
+            except Exception:
+                try: conn.close()
+                except Exception: pass
+        else:
+            try: conn.close()
+            except Exception: pass
 
 
 def init_db():
@@ -1556,7 +1592,7 @@ async def upload_erp(file: UploadFile = File(...)):
 
 
 @app.get("/api/erp/orders")
-async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 100):
+async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 50):
     with get_db() as conn:
         q = "SELECT * FROM erp_orders WHERE 1=1"
         params: list = []
@@ -1567,7 +1603,7 @@ async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: s
         if cancel_type:
             q += " AND cancel_type=?"; params.append(cancel_type)
         q += " ORDER BY order_date DESC, order_no LIMIT ?"
-        params.append(min(limit, 200))
+        params.append(min(limit, 100))
         rows = conn.execute(q, params).fetchall()
     return [dict(r) for r in rows]
 
