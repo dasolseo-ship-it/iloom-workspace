@@ -1,5 +1,5 @@
 
-<title>홈플러스 송도점 위탁판매 대리점 계약 종료 품의</title>
+<title>일룸 송도점 위탁판매 계약 및 운영 종료의 건</title>
 
 <style>
   :root {
@@ -10,23 +10,19 @@
     --border: #D0D0D0;
     --border-strong: #AAAAAA;
     --header-dark: #2D2D2D;
-    --ph-bg: #FFFBEB;
-    --ph-border: #D97706;
-    --ph-text: #92400E;
+    --ref-bg: #F0F4FF;
+    --ref-border: #6B7FC4;
+    --ref-text: #3B4A8A;
   }
 
-  *, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
     background: #E4E4E4;
     font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Nanum Gothic', sans-serif;
     color: var(--text);
     font-size: 13px;
-    line-height: 1.75;
+    line-height: 1.8;
     padding: 40px 16px 60px;
   }
 
@@ -35,233 +31,116 @@
     max-width: 794px;
     margin: 0 auto;
     padding: 64px 72px 80px;
-    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.13);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.13);
   }
 
-  /* ── Document header ── */
+  /* ── Doc header ── */
   .doc-header {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     padding-bottom: 14px;
-    margin-bottom: 26px;
+    margin-bottom: 8px;
     border-bottom: 3px solid var(--accent);
   }
+  .doc-label { font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; }
+  .doc-title { font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.35; }
+  .doc-meta { text-align: right; font-size: 11.5px; color: #888; line-height: 1.9; }
 
-  .doc-label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.22em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-
-  .doc-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--text);
-    line-height: 1.35;
-  }
-
-  .doc-meta {
-    text-align: right;
-    font-size: 11.5px;
-    color: #888;
-    line-height: 1.9;
-  }
+  /* ── Meta table ── */
+  .meta-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+  .meta-table td { padding: 5px 10px; border: 1px solid var(--border-strong); }
+  .meta-table td.meta-label { background: var(--surface); font-weight: 700; width: 100px; color: #555; white-space: nowrap; }
+  .meta-table td.meta-value { }
 
   /* ── Preamble ── */
-  .preamble {
-    font-size: 12.5px;
-    color: #555;
-    text-align: center;
-    padding: 4px 0;
-  }
-
-  .divider {
-    text-align: center;
-    color: #BBBBBB;
-    font-size: 11px;
-    letter-spacing: 0.35em;
-    margin: 12px 0 32px;
-  }
+  .preamble { font-size: 12.5px; color: #555; text-align: center; padding: 4px 0 2px; }
+  .divider { text-align: center; color: #BBBBBB; font-size: 11px; letter-spacing: 0.35em; margin: 10px 0 28px; }
 
   /* ── Section ── */
-  .section {
-    margin-bottom: 26px;
-  }
-
-  .section-head {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    margin-bottom: 11px;
-  }
-
-  .section-bar {
-    width: 4px;
-    background: var(--accent);
-    flex-shrink: 0;
-    border-radius: 1px 0 0 1px;
-  }
-
-  .section-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-    background: var(--surface);
-    flex: 1;
-    padding: 6px 12px;
-    border: 1px solid var(--border);
-    border-left: none;
-  }
-
-  .section-body {
-    padding-left: 14px;
-  }
+  .section { margin-bottom: 26px; }
+  .section-head { display: flex; align-items: stretch; gap: 0; margin-bottom: 11px; }
+  .section-bar { width: 4px; background: var(--accent); flex-shrink: 0; border-radius: 1px 0 0 1px; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--text); background: var(--surface); flex: 1; padding: 6px 12px; border: 1px solid var(--border); border-left: none; }
+  .section-body { padding-left: 14px; }
 
   /* ── Numbered list ── */
-  .ol-body {
-    list-style: none;
-    counter-reset: ol-cnt;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
+  .ol-body { list-style: none; counter-reset: ol-cnt; display: flex; flex-direction: column; gap: 6px; }
+  .ol-body > li { counter-increment: ol-cnt; padding-left: 24px; position: relative; }
+  .ol-body > li::before { content: counter(ol-cnt) ")"; position: absolute; left: 0; font-weight: 700; color: var(--text); }
 
-  .ol-body > li {
-    counter-increment: ol-cnt;
-    padding-left: 22px;
-    position: relative;
-  }
-
-  .ol-body > li::before {
-    content: counter(ol-cnt) ")";
-    position: absolute;
-    left: 0;
+  /* ── Timeline item (진행 경과용) ── */
+  .timeline { display: flex; flex-direction: column; gap: 16px; }
+  .tl-item { display: flex; gap: 14px; }
+  .tl-step {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11.5px;
     font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .tl-content { flex: 1; }
+  .tl-label {
+    font-weight: 700;
+    font-size: 12.5px;
     color: var(--text);
+    margin-bottom: 4px;
+  }
+  .tl-date {
+    display: inline-block;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 10.5px;
+    color: #666;
+    padding: 0 6px;
+    margin-left: 6px;
+    font-weight: 400;
+    vertical-align: middle;
+  }
+  .tl-body { font-size: 12.5px; color: #444; line-height: 1.75; }
+  .tl-body ul { list-style: none; margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
+  .tl-body ul li { padding-left: 14px; position: relative; }
+  .tl-body ul li::before { content: "–"; position: absolute; left: 0; color: var(--accent); font-weight: 600; }
+
+  /* ── Reference tag ── */
+  .ref-tag {
+    display: inline-block;
+    background: var(--ref-bg);
+    border: 1px solid var(--ref-border);
+    border-radius: 3px;
+    padding: 0px 7px;
+    font-size: 10.5px;
+    color: var(--ref-text);
+    margin-top: 4px;
+    font-style: italic;
   }
 
   /* ── Sub-bullet list ── */
-  .sub-list {
-    list-style: none;
-    margin: 6px 0 6px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .sub-list li {
-    padding-left: 14px;
-    position: relative;
-    font-size: 12.5px;
-    color: #444;
-  }
-
-  .sub-list li::before {
-    content: "–";
-    position: absolute;
-    left: 0;
-    color: var(--accent);
-    font-weight: 600;
-  }
+  .sub-list { list-style: none; margin: 6px 0 6px 16px; display: flex; flex-direction: column; gap: 3px; }
+  .sub-list li { padding-left: 14px; position: relative; font-size: 12.5px; color: #444; }
+  .sub-list li::before { content: "–"; position: absolute; left: 0; color: var(--accent); font-weight: 600; }
 
   /* ── Tables ── */
-  .table-wrap {
-    overflow-x: auto;
-    margin: 6px 0;
-  }
-
-  .table-caption {
-    text-align: right;
-    font-size: 10.5px;
-    color: #999;
-    margin-bottom: 5px;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12.5px;
-  }
-
-  table th {
-    background: var(--header-dark);
-    color: #FFFFFF;
-    font-weight: 600;
-    padding: 8px 12px;
-    border: 1px solid #3D3D3D;
-    text-align: center;
-    white-space: nowrap;
-    letter-spacing: 0.02em;
-  }
-
-  table td {
-    padding: 7px 12px;
-    border: 1px solid var(--border-strong);
-    text-align: center;
-    vertical-align: middle;
-  }
-
-  table td.row-label {
-    background: var(--surface);
-    font-weight: 700;
-    font-size: 12px;
-    width: 115px;
-    color: #444;
-  }
-
-  table td.left {
-    text-align: left;
-  }
-
-  table td.note {
-    font-size: 11px;
-    color: #666;
-    text-align: left;
-    line-height: 1.65;
-  }
-
-  /* ── Placeholder ── */
-  .ph {
-    display: inline-block;
-    background: var(--ph-bg);
-    border: 1px dashed var(--ph-border);
-    border-radius: 2px;
-    padding: 1px 8px;
-    font-size: 11px;
-    color: var(--ph-text);
-    font-style: italic;
-    white-space: nowrap;
-  }
-
-  /* ── Inner (nested) table ── */
-  .inner-wrap {
-    margin: 8px 0 8px 16px;
-  }
-
-  .inner-wrap table {
-    max-width: 300px;
-  }
+  .table-wrap { overflow-x: auto; margin: 6px 0; }
+  .table-caption { text-align: right; font-size: 10.5px; color: #999; margin-bottom: 5px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table th { background: var(--header-dark); color: #FFFFFF; font-weight: 600; padding: 8px 12px; border: 1px solid #3D3D3D; text-align: center; white-space: nowrap; }
+  table td { padding: 7px 12px; border: 1px solid var(--border-strong); text-align: center; vertical-align: middle; }
+  table td.row-label { background: var(--surface); font-weight: 700; font-size: 12px; color: #444; }
+  table td.left { text-align: left; }
+  table td.note { font-size: 11px; color: #666; text-align: left; line-height: 1.65; }
 
   /* ── End marker ── */
-  .end-marker {
-    text-align: center;
-    margin-top: 52px;
-    font-size: 12.5px;
-    color: #777;
-    letter-spacing: 0.12em;
-  }
+  .end-marker { text-align: center; margin-top: 52px; font-size: 12.5px; color: #777; letter-spacing: 0.12em; }
 
   @media print {
     body { background: white; padding: 0; }
     .page { margin: 0; padding: 48px 56px 60px; box-shadow: none; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; animation: none !important; }
   }
 </style>
 
@@ -269,17 +148,33 @@
 
   <header class="doc-header">
     <div>
-      <div class="doc-label">품 의 서</div>
-      <h1 class="doc-title">홈플러스 송도점 위탁판매<br>대리점 계약 종료</h1>
+      <div class="doc-label">품 의 서 (자유양식)</div>
+      <h1 class="doc-title">일룸 송도점 위탁판매 계약 및 운영 종료의 건</h1>
     </div>
     <div class="doc-meta">
-      영업관리팀 &nbsp;서다솔<br>
-      2026. 06. 30.
+      파트너채널팀 &nbsp;서다솔<br>
+      2026. 07. 09.<br>
+      <span style="font-size:10.5px;color:#aaa;">일룸-품의26-07-00147</span>
     </div>
   </header>
 
-  <p class="preamble">이하와 같이 일룸 홈플러스송도점 위탁판매 대리점 계약을 종료하고자 하오니 검토 후 재가 바랍니다.</p>
-  <div class="divider">— 이 &nbsp;&nbsp;&nbsp; 례 —</div>
+  <table class="meta-table">
+    <tr>
+      <td class="meta-label">문서번호</td>
+      <td class="meta-value">일룸-품의26-07-00147</td>
+      <td class="meta-label" style="width:80px;">작성일</td>
+      <td class="meta-value" style="width:110px;">2026-07-09</td>
+    </tr>
+    <tr>
+      <td class="meta-label">작성부서</td>
+      <td class="meta-value">일룸사업부 &gt; 유통사업부문 &gt; 파트너채널팀</td>
+      <td class="meta-label">작성자</td>
+      <td class="meta-value">서다솔</td>
+    </tr>
+  </table>
+
+  <p class="preamble">아래와 같이 일룸 송도점 위탁판매 계약 및 운영을 종료하고자 하오니 검토 후 재가 바랍니다.</p>
+  <div class="divider">----- 아 래 -----</div>
 
   <!-- 1. 개요 -->
   <section class="section">
@@ -289,134 +184,197 @@
     </div>
     <div class="section-body">
       <ol class="ol-body">
-        <li>일룸 홈플러스송도점 위탁판매 대리점의 계약기간은 2025.09.01~2026.08.31이나, 홈플러스 기업회생 리스크에 따라 계약기간을 2026.07.31로 단축 변경하여 위탁판매 계약 및 운영을 종료하고자 함</li>
+        <li>일룸 송도점의 홈플러스와의 계약은 2025년 9월 1일부터 2026년 8월 31일까지 체결되어 있으나 홈플러스 기업회생 리스크에 따라 계약기간을 2026년 7월 31일로 단축 변경하여, 이에 따라 2026년 7월 31일부로 위탁판매 계약 및 운영을 종료하고자 함</li>
       </ol>
     </div>
   </section>
 
-  <!-- 2. 해당 대리점 -->
+  <!-- 2. 진행 경과 및 종료 사유 (신규) -->
   <section class="section">
     <div class="section-head">
       <div class="section-bar"></div>
-      <div class="section-title">2. 해당 대리점</div>
+      <div class="section-title">2. 진행 경과 및 종료 사유</div>
     </div>
     <div class="section-body">
-      <div class="table-wrap">
-        <div class="table-caption">[단위: 원 / VAT별도]</div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:115px;">구분</th>
-              <th>송도5</th>
-              <th style="width:230px;">비고</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="row-label">대리점코드</td>
-              <td><span class="ph">ERP 코드 확인 필요</span></td>
-              <td>-</td>
-            </tr>
-            <tr>
-              <td class="row-label">주소</td>
-              <td class="left">
-                인천광역시 연수구 송도국제대로 165<br>
-                <span style="font-size:11.5px;color:#777;">(홈플러스 송도점 1층 X7, YL 코너)</span>
-              </td>
-              <td class="note">이오름넷 본관 3층</td>
-            </tr>
-            <tr>
-              <td class="row-label">대표자명</td>
-              <td>이종균</td>
-              <td>-</td>
-            </tr>
-            <tr>
-              <td class="row-label">사업자등록번호</td>
-              <td><span class="ph">사업자번호 확인 필요</span></td>
-              <td>-</td>
-            </tr>
-            <tr>
-              <td class="row-label">누계매출액</td>
-              <td>76,478,724</td>
-              <td class="note">
-                2025.09.01~2026.07.09 기준<br>
-                *ERP 데이터 보관 기준 집계
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
+      <div class="timeline">
 
-  <!-- 3. 종료 상세 내용 -->
-  <section class="section">
-    <div class="section-head">
-      <div class="section-bar"></div>
-      <div class="section-title">3. 종료 상세 내용</div>
-    </div>
-    <div class="section-body">
-      <ol class="ol-body">
-        <li>종료시점 : 2026년 7월 31일</li>
-        <li>
-          26년 7월 납기까지만 운영 후 운영 종료로 대리점주 협의 완료
-          <span style="font-size:12px;color:#666;display:block;margin-top:2px;">(2026년 7월 31일 이후 잔여매출 없음)</span>
-        </li>
-        <li>
-          잔여매출 및 거래보증금
-          <ul class="sub-list">
-            <li>2026년 07월 09일 기준 잔여매출</li>
-          </ul>
-          <div class="inner-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:115px;">구분</th>
-                  <th>송도5</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="row-label">잔여매출</td>
-                  <td>8,583,673</td>
-                </tr>
-              </tbody>
-            </table>
+        <!-- ① -->
+        <div class="tl-item">
+          <div class="tl-step">①</div>
+          <div class="tl-content">
+            <div class="tl-label">홈플러스 기업회생절차 개시에 따른 리스크 대응 <span class="tl-date">2025.08</span></div>
+            <div class="tl-body">
+              <ul>
+                <li>홈플러스 기업회생절차 개시에 따른 매출 정산 리스크를 최소화하기 위해, 2025년 9월 재계약 시 기존 홈플러스 단말기 결제방식에서 일룸 단말기 결제방식으로 변경하여 운영함</li>
+              </ul>
+              <div class="ref-tag">참고: 일룸-품의25-08-00337 일룸 송도점 재계약 및 위탁판매 계약 연장의 건</div>
+            </div>
           </div>
-          <ul class="sub-list">
-            <li>6월 및 7월 잔여매출 미감 후 별도 정산 보고 진행</li>
-            <li>거래보증금 : 정산보고 이후 현금 2,000만원 반환 진행</li>
-          </ul>
-        </li>
-        <li>대리점 ERP 매장상태정보 : 8/1 이후 일시정지 (일룸 재경팀)</li>
+        </div>
+
+        <!-- ② -->
+        <div class="tl-item">
+          <div class="tl-step">②</div>
+          <div class="tl-content">
+            <div class="tl-label">일룸 단말기 결제방식 유지 결정 <span class="tl-date">2026.02</span></div>
+            <div class="tl-body">
+              <ul>
+                <li>2026년 2월 28일 기준 1개월 전 시점에 홈플러스 기업회생절차 진행 상황을 점검한 결과, 회생 상황이 나아지지 않아 2026년 3월 1일 이후에도 일룸 단말기 결제방식을 계속 유지하기로 결정함</li>
+              </ul>
+              <div class="ref-tag">참고: 일룸-품의26-02-00111 일룸 송도점 계약조건 변경 합의서 체결의 건(일룸 단말기 결제 방식 유지)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ③ -->
+        <div class="tl-item">
+          <div class="tl-step">③</div>
+          <div class="tl-content">
+            <div class="tl-label">홈플러스 37개 매장 영업 잠정 중단 및 수수료 조건 변경 <span class="tl-date">2026.05</span></div>
+            <div class="tl-body">
+              <ul>
+                <li>홈플러스는 자구책의 일환으로 2026년 5월 10일부로 기여도가 낮은 37개 매장의 영업을 잠정 중단하였으며, 일룸 송도점도 해당 대상에 포함됨</li>
+                <li>이에 따라 2026년 5월 1일 ~ 2026년 8월 31일 한시적으로 전대료율을 변경하여 미니멈 개런티 미적용, 일괄 수수료율 7.4% 적용됨</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ④ -->
+        <div class="tl-item">
+          <div class="tl-step">④</div>
+          <div class="tl-content">
+            <div class="tl-label">일룸 송도점 영업 전면 중단 및 매출 급감 <span class="tl-date">2026.05.10~</span></div>
+            <div class="tl-body">
+              <ul>
+                <li>홈플러스 구조조정의 일환으로 2026년 5월 10일부로 송도점 자체 영업이 전면 중단됨에 따라, 당사 매장의 정상적인 영업 및 고객 유치가 물리적으로 불가능한 상황이며, 이로 인해 매출이 큰 폭으로 하락하고 있음</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⑤ -->
+        <div class="tl-item">
+          <div class="tl-step">⑤</div>
+          <div class="tl-content">
+            <div class="tl-label">법원의 홈플러스 기업회생절차 폐지 결정 <span class="tl-date">2026.07.03</span></div>
+            <div class="tl-body">
+              <ul>
+                <li>2026년 7월 3일 법원의 홈플러스 기업회생절차 폐지 결정으로 파산 수순이 예상됨에 따라, 당사 자산 보호를 위한 조속한 철수가 불가피한 상황으로 판단됨</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⑥ -->
+        <div class="tl-item">
+          <div class="tl-step">⑥</div>
+          <div class="tl-content">
+            <div class="tl-label">당사 투자 자산 감가상각 완료</div>
+            <div class="tl-body">
+              <ul>
+                <li>일룸 송도점 내 당사 투자 자산에 대한 감가상각이 완료되어 잔존가치가 없는 상태임</li>
+              </ul>
+              <div class="ref-tag">참고: 감가상각비명세서_일룸 송도점</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⑦ -->
+        <div class="tl-item">
+          <div class="tl-step">⑦</div>
+          <div class="tl-content">
+            <div class="tl-label">홈플러스 측과 조기 종료 합의</div>
+            <div class="tl-body">
+              <ul>
+                <li>원 계약기간(2026년 8월 31일) 대비 1개월 조기 종료하는 것으로 홈플러스 측과 합의하였으며, 해당 합의서를 수신한 상태임</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⑧ -->
+        <div class="tl-item">
+          <div class="tl-step">⑧</div>
+          <div class="tl-content">
+            <div class="tl-label">당사 법무팀 법무검토 완료</div>
+            <div class="tl-body">
+              <ul>
+                <li>당사 법무팀의 법무검토를 완료하였으며, 합의서를 체결하여 2026년 7월 31일자로 운영을 종료하고자 함</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /timeline -->
+    </div>
+  </section>
+
+  <!-- 3. 해당 매장 정보 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-bar"></div>
+      <div class="section-title">3. 해당 매장 정보</div>
+    </div>
+    <div class="section-body">
+      <ol class="ol-body">
+        <li>매장명 : 일룸 송도점</li>
+        <li>매장 유형 : 투자형B샵</li>
+        <li>주소 : 인천광역시 연수구 송도국제대로 165 (홈플러스 송도점 1층 X7, YL 코너)</li>
+        <li>매장면적 : 444.2㎡ (134.4평)</li>
+        <li>계약기간 : 2019년 10월 11일 ~ 2026년 7월 31일 (약 81.6개월)</li>
+        <li>월평균 매출 : 120,016,621원 (VAT별도)</li>
+        <li>누계 매출 : 9,797,677,477원 (VAT별도)</li>
       </ol>
     </div>
   </section>
 
-  <!-- 4. 합의서 체결 -->
+  <!-- 4. 위탁판매 계약 종료 내용 -->
   <section class="section">
     <div class="section-head">
       <div class="section-bar"></div>
-      <div class="section-title">4. 합의서 체결</div>
-    </div>
-    <div class="section-body">
-      <ul class="sub-list">
-        <li>품의 결재 득 후 모두싸인 체결 예정</li>
-      </ul>
-    </div>
-  </section>
-
-  <!-- 5. 첨부 -->
-  <section class="section">
-    <div class="section-head">
-      <div class="section-bar"></div>
-      <div class="section-title">5. 첨부</div>
+      <div class="section-title">4. 위탁판매 계약 종료 내용</div>
     </div>
     <div class="section-body">
       <ol class="ol-body">
-        <li>일룸 홈플러스송도점_누계매출액 정리</li>
-        <li>일룸 홈플러스송도점_잔여매출액 정리</li>
-        <li>일룸 홈플러스송도점 계약종료 및 정산 합의서</li>
+        <li>계약 해지 시기 : 2026년 7월 31일</li>
+        <li>
+          잔여 매출
+          <ul class="sub-list">
+            <li>2026년 07월 09일 기준 : 8,583,673원 (VAT별도)</li>
+            <li>최종 잔여 납기 일자 : 2026년 8월 31일 (그 이후 잔여 납기 X)</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 5. 추가 진행 사항 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-bar"></div>
+      <div class="section-title">5. 추가 진행 사항</div>
+    </div>
+    <div class="section-body">
+      <ol class="ol-body">
+        <li>품의 결재 득 후 모두싸인 체결 예정</li>
+        <li>일룸 송도점 ERP 매장상태정보 (일시정지, 폐쇄) 단계별 코드 변환 진행 (일룸 재경팀)</li>
+        <li>납기 최종 완료후 (8/31 예정) 별도 정산 품의 진행, 이후 현금 보증금 (2천만원) 출납 진행</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 6. 첨부파일 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-bar"></div>
+      <div class="section-title">6. 첨부파일</div>
+    </div>
+    <div class="section-body">
+      <ol class="ol-body">
+        <li>일룸 송도점_계약종료 및 정산합의서</li>
+        <li>일룸 송도점 누계매출</li>
+        <li>일룸 송도점 잔여매출</li>
       </ol>
     </div>
   </section>
