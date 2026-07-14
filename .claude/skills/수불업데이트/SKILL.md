@@ -8,13 +8,13 @@ allowed-tools: Read, Bash(py *), Bash(python *)
 ERP 미결제건관리 스크린샷을 분석해서 수불관리 구글 시트를 자동으로 업데이트한다.
 
 ## 입력 위치
-- 스크린샷 폴더: 00-inbox/erp-screenshots/ (PNG, JPG 모두 가능)
+- 스크린샷 폴더: 20-operations/28-수불관리/erp-screenshots/ (PNG, JPG 모두 가능)
 - 사업소별로 여러 파일이 있어도 자동으로 모두 처리
 
 ## 실행 순서
 
 ### 1단계: 스크린샷 읽기 및 수주번호 추출
-00-inbox/erp-screenshots/ 폴더의 모든 이미지 파일을 Read 툴로 읽는다.
+20-operations/28-수불관리/erp-screenshots/ 폴더의 모든 이미지 파일을 Read 툴로 읽는다.
 각 이미지에서 수주번호(i 또는 I로 시작하는 15자리 코드, 예: i20260512121000) 전체를 추출한다.
 모든 이미지의 수주번호를 합쳐서 하나의 목록으로 만든다.
 목록이 비어 있으면 스크린샷 폴더를 확인 요청 후 중단.
@@ -41,6 +41,6 @@ PYTHONIOENCODING=utf-8 py "${CLAUDE_SKILL_DIR}/scripts/update_subul.py" --number
 요약: 총 XX건 처리완료 업데이트 완료
 
 ## 오류 대응
-- 스크린샷 없음: 00-inbox/erp-screenshots/ 에 PNG 파일 있는지 확인 요청
+- 스크린샷 없음: 20-operations/28-수불관리/erp-screenshots/ 에 PNG 파일 있는지 확인 요청
 - 브라우저 인증 창: 본인 퍼시스 구글 계정으로 로그인 후 허용 클릭
 - 시트 접근 오류: 시트 편집 권한 확인
