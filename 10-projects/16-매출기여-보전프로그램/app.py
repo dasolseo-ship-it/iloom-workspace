@@ -1592,7 +1592,7 @@ async def upload_erp(file: UploadFile = File(...)):
 
 
 @app.get("/api/erp/orders")
-async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 10):
+async def list_erp_orders(store_type: str = "", status: str = "", cancel_type: str = "", limit: int = 5):
     with get_db() as conn:
         q = "SELECT * FROM erp_orders WHERE 1=1"
         params: list = []
