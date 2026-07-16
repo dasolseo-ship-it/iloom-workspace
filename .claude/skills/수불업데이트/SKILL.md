@@ -1,6 +1,6 @@
 ---
 name: 수불업데이트
-description: 퇴근 전 대리점 수불관리 자동화. 00-inbox/erp-screenshots/ 폴더의 ERP 미결제건관리 캡처 화면을 읽어서, 수불관리 구글 시트에서 ERP에 없는 건들을 처리완료로 자동 업데이트. "수불", "수불업데이트", "미결제 확인", "처리완료 업데이트", "수불 처리" 등 언급 시 자동 실행.
+description: 퇴근 전 대리점 수불관리 자동화. 20-operations/28-수불관리/erp-screenshots/ 폴더의 ERP 미결제건관리 캡처 화면을 읽어서, 수불관리 구글 시트에서 ERP에 없는 건들을 처리완료로 자동 업데이트. "수불", "수불업데이트", "미결제 확인", "처리완료 업데이트", "수불 처리" 등 언급 시 자동 실행.
 argument-hint: "[없음 - 폴더 자동 감지]"
 allowed-tools: Read, Bash(py *), Bash(python *)
 ---
